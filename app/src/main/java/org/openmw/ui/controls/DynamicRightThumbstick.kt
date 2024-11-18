@@ -1,8 +1,7 @@
 package org.openmw.ui.controls
 
 import android.content.Context
-import android.view.KeyEvent
-import android.view.MotionEvent
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -46,37 +45,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
-import org.libsdl.app.SDLActivity.onNativeKeyDown
-import org.libsdl.app.SDLActivity.onNativeKeyUp
+import org.libsdl.app.SDLActivity
 import org.openmw.ui.controls.UIStateManager.configureControls
-import org.openmw.ui.controls.UIStateManager.isThumbDragging
 import org.openmw.ui.controls.UIStateManager.logAllButtonStates
 import org.openmw.ui.controls.UIStateManager.updateButtonState
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun ResizableDraggableThumbstick(
+fun ResizableDraggableRightThumbstick(
     context: Context,
     id: Int,
-    keyCode: Int,
     editMode: Boolean
 ) {
     var buttonState = UIStateManager.buttonStates.getOrPut(id) {
-        mutableStateOf(ButtonState(id, 200f, 0f, 0f, false, keyCode, "Black", 0.25f))
+        mutableStateOf(ButtonState(id, 200f, 300f, 300f, false, 98, "Black", 0.25f))
     }.value
-
     var buttonSize by remember { mutableStateOf(buttonState.size.dp) }
     var buttonColor = remember { mutableStateOf(buttonState.color.toColor()) }
     var buttonAlpha by remember { mutableFloatStateOf(buttonState.alpha) }
@@ -86,11 +77,11 @@ fun ResizableDraggableThumbstick(
     val visible = UIStateManager.visible
     val density = LocalDensity.current
     val radiusPx = with(density) { (buttonSize / 2).toPx() }
-    val deadZone = 0.2f * radiusPx
-    var touchState by remember { mutableStateOf(Offset(0f, 0f)) }
+    var isDragging = remember { mutableStateOf(false) }
+    val initialOffset = with(LocalDensity.current) { Offset(buttonSize.toPx() / 2, buttonSize.toPx() / 2) }
+    var touchOffset by remember { mutableStateOf(initialOffset) }
     var showControlsPopup by remember { mutableStateOf(false) }
-    val thumbColor = if (isThumbDragging) Color.Red.copy(alpha = buttonAlpha) else buttonColor.value.copy(alpha = buttonAlpha)
-
+    val RightThumbColor = if (isDragging.value) Color.Red.copy(alpha = buttonAlpha) else buttonColor.value.copy(alpha = buttonAlpha)
     var saveState = {
         var updatedState = buttonState.copy(
             size = buttonSize.value,
@@ -105,8 +96,6 @@ fun ResizableDraggableThumbstick(
         saveButtonState(context, UIStateManager.buttonStates.values.map { it.value })
         logAllButtonStates()
     }
-
-
     AnimatedVisibility(
         visible = visible,
         enter = slideInVertically(
@@ -143,94 +132,98 @@ fun ResizableDraggableThumbstick(
                         if (editMode) {
                             Modifier.pointerInput(Unit) {
                                 detectDragGestures(
-                                    onDragStart = { isThumbDragging = true },
+                                    onDragStart = { isDragging.value = true },
                                     onDrag = { change, dragAmount ->
                                         offsetX += dragAmount.x
                                         offsetY += dragAmount.y
                                     },
                                     onDragEnd = {
-                                        isThumbDragging = false
+                                        isDragging.value = false
                                         saveState()
                                     }
                                 )
                             }
                         } else Modifier
                     )
-                    .border(2.dp, if (isThumbDragging) Color.Red else thumbColor, shape = CircleShape)
+                    .border(2.dp, if (isDragging.value) Color.Red else RightThumbColor, shape = CircleShape)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .fillMaxSize()
-                        .border(2.dp, thumbColor, CircleShape)
+                        .border(2.dp, RightThumbColor, CircleShape)
                         .then(
-                            Modifier.pointerInput(Unit) {
-                                if (!configureControls) {
+                            if (!configureControls) {
+                                Modifier.pointerInput(Unit) {
                                     awaitPointerEventScope {
+                                        val displayMetrics = context.resources.displayMetrics
+                                        val screenWidth = displayMetrics.widthPixels.toFloat()
+                                        val screenHeight = displayMetrics.heightPixels.toFloat()
+                                        var startX = SDLActivity.getMouseX().toFloat()
+                                        var startY = SDLActivity.getMouseY().toFloat()
+                                        val mouseScalingFactor = 900f // This can be configurable
+                                        var curX = startX
+                                        var curY = startY
+                                        var draggingStarted = false
                                         while (true) {
                                             val event = awaitPointerEvent()
-                                            val location = Offset(event.changes.first().position.x, event.changes.first().position.y)
-                                            when (event.type) {
-                                                PointerEventType.Press, PointerEventType.Move -> {
-                                                    val newX = (location.x - radiusPx).coerceIn(-radiusPx, radiusPx)
-                                                    val newY = (location.y - radiusPx).coerceIn(-radiusPx, radiusPx)
-                                                    touchState = Offset(newX, newY)
-
-                                                    // Handle touch actions
-                                                    onNativeKeyUp(KeyEvent.KEYCODE_W)
-                                                    onNativeKeyUp(KeyEvent.KEYCODE_A)
-                                                    onNativeKeyUp(KeyEvent.KEYCODE_S)
-                                                    onNativeKeyUp(KeyEvent.KEYCODE_D)
-
-                                                    val xRatio = touchState.x / radiusPx
-                                                    val yRatio = touchState.y / radiusPx
-
-                                                    when {
-                                                        abs(yRatio) > abs(xRatio) -> {
-                                                            if (touchState.y < -deadZone) onNativeKeyDown(KeyEvent.KEYCODE_W)
-                                                            if (touchState.y > deadZone) onNativeKeyDown(KeyEvent.KEYCODE_S)
-                                                            if (touchState.x < -deadZone) onNativeKeyDown(KeyEvent.KEYCODE_A)
-                                                            if (touchState.x > deadZone) onNativeKeyDown(KeyEvent.KEYCODE_D)
+                                            val down = event.changes.firstOrNull()?.pressed == true
+                                            if (down) {
+                                                while (true) {
+                                                    val dragEvent = awaitPointerEvent()
+                                                    val dragChange = dragEvent.changes.firstOrNull()
+                                                    if (dragChange?.pressed == true) {
+                                                        val newX = dragChange.position.x
+                                                        val newY = dragChange.position.y
+                                                        if (!draggingStarted) {
+                                                            curX = newX
+                                                            curY = newY
+                                                            draggingStarted = true
                                                         }
-                                                        abs(xRatio) > 0.9f -> {
-                                                            if (touchState.y < -deadZone) onNativeKeyDown(KeyEvent.KEYCODE_W)
-                                                            if (touchState.y > deadZone) onNativeKeyDown(KeyEvent.KEYCODE_S)
-                                                            if (touchState.x < -deadZone) onNativeKeyDown(KeyEvent.KEYCODE_A)
-                                                            if (touchState.x > deadZone) onNativeKeyDown(KeyEvent.KEYCODE_D)
+                                                        val movementX = (newX - curX) * mouseScalingFactor / screenWidth
+                                                        val movementY = (newY - curY) * mouseScalingFactor / screenHeight
+                                                        touchOffset = Offset(newX, newY)
+
+                                                        // Call the native function with updated coordinates
+                                                        SDLActivity.sendRelativeMouseMotion(
+                                                            movementX.roundToInt().toInt(), movementY.roundToInt()
+                                                                .toInt()
+                                                        )
+                                                        // Update current positions
+                                                        curX = newX
+                                                        curY = newY
+                                                        Log.d("DragMovement", "movementX: $movementX, movementY: $movementY")
+                                                    } else {
+                                                        // Consider it a tap if dragging did not start
+                                                        if (!draggingStarted) {
+                                                            Log.d("TapEvent", "Tap detected at x: $startX, y: $startY")
                                                         }
-                                                        else -> {
-                                                            if (touchState.y < -deadZone) onNativeKeyDown(KeyEvent.KEYCODE_W)
-                                                            if (touchState.y > deadZone) onNativeKeyDown(KeyEvent.KEYCODE_S)
-                                                            if (touchState.x < -deadZone) onNativeKeyDown(KeyEvent.KEYCODE_A)
-                                                            if (touchState.x > deadZone) onNativeKeyDown(KeyEvent.KEYCODE_D)
-                                                        }
+                                                        // End the drag event if the pointer is released
+                                                        draggingStarted = false
+                                                        touchOffset = Offset(buttonSize.toPx() / 2, buttonSize.toPx() / 2)
+                                                        break
                                                     }
                                                 }
-                                                PointerEventType.Release, PointerEventType.Exit -> {
-                                                    touchState = Offset.Zero
-                                                    onNativeKeyUp(KeyEvent.KEYCODE_W)
-                                                    onNativeKeyUp(KeyEvent.KEYCODE_A)
-                                                    onNativeKeyUp(KeyEvent.KEYCODE_S)
-                                                    onNativeKeyUp(KeyEvent.KEYCODE_D)
-                                                }
-                                                else -> Unit
                                             }
                                         }
                                     }
                                 }
+                            } else {
+                                Modifier
                             }
-                        )
+                        ),
                 ) {
+                    val density = LocalDensity.current.density
                     Box(
                         modifier = Modifier
                             .size(25.dp)
                             .offset {
-                                val offsetXx = (touchState.x / density.density).coerceIn(-radiusPx / density.density, radiusPx / density.density).dp
-                                val offsetYy = (touchState.y / density.density).coerceIn(-radiusPx / density.density, radiusPx / density.density).dp
-                                IntOffset(offsetXx.roundToPx(), offsetYy.roundToPx())
+                                val offsetX = ((touchOffset.x - (buttonSize.toPx() / 2)) / density).coerceIn(-radiusPx, radiusPx).dp.roundToPx()
+                                val offsetY = ((touchOffset.y - (buttonSize.toPx() / 2)) / density).coerceIn(-radiusPx, radiusPx).dp.roundToPx()
+                                IntOffset(offsetX, offsetY)
                             }
                             .background(
-                                thumbColor,
+                                RightThumbColor,
                                 shape = CircleShape
                             )
                     )

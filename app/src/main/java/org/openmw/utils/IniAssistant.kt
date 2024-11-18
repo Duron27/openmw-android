@@ -444,7 +444,6 @@ fun ExpandableBox(expanded: MutableState<Boolean>) {
             .border(
                 BorderStroke(width = 3.dp, color = Color.Black)
             )
-            .height(if (expanded.value) 800.dp else 75.dp)
             .fillMaxWidth()
             .background(color = transparentBlack)
             .clickable(

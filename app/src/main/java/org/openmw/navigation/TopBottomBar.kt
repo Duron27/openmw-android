@@ -9,10 +9,15 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
@@ -29,6 +34,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,16 +48,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import org.openmw.Constants
 import org.openmw.Constants.SETTINGS_FILE
 import org.openmw.EngineActivity
-import org.openmw.GameFilesPreferences
 import org.openmw.R
-import org.openmw.dataStore
-import org.openmw.fragments.NavmeshActivity
 import org.openmw.fragments.containsMorrowindFolder
 import org.openmw.fragments.getGameFilesUri
 import org.openmw.ui.controls.UIStateManager
@@ -58,9 +64,6 @@ import org.openmw.ui.theme.transparentBlack
 import org.openmw.utils.UnzipWithProgress
 import org.openmw.utils.UserManageAssets
 import java.io.File
-import java.io.FileInputStream
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
 
 @ExperimentalMaterial3Api
 @Composable
@@ -68,7 +71,9 @@ fun MyTopBar(context: Context) {
     var expanded by remember { mutableStateOf(false) }
     var showDialog by remember { mutableStateOf(false) }
     var showDialog2 by remember { mutableStateOf(false) }
+    var showProfileDialog by remember { mutableStateOf(false) }
     val settingsFile = File(SETTINGS_FILE)
+    val basePath = context.getExternalFilesDir(null)?.absolutePath ?: ""
     val destDirectory = LocalContext.current.getExternalFilesDir(null)?.absolutePath + "/Morrowind"
     var directoryExists by remember { mutableStateOf(File(destDirectory).exists()) }
     var showUnzipProgress by remember { mutableStateOf(false) }
@@ -123,10 +128,12 @@ fun MyTopBar(context: Context) {
                 DropdownMenuItem(
                     text = { Text("Build Navmesh", color = Color.White) },
                     onClick = {
-                        Toast.makeText(context, "Not Implemented Yet", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Not Implemented yet.", Toast.LENGTH_LONG).show()
+
                         /*
-                        val intent = Intent(context, NavmeshActivity::class.java).apply {
+                        val intent = Intent(context, EngineActivity::class.java).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            putExtra("USE_NAVMESH", true)
                         }
                         context.startActivity(intent)
 
@@ -153,6 +160,12 @@ fun MyTopBar(context: Context) {
                         }
                     },
                     onClick = { /* Handle click if necessary */ }
+                )
+                DropdownMenuItem(
+                    text = { Text("Profile Management", color = Color.White) },
+                    onClick = {
+                        showProfileDialog = true  // Show profile dialog
+                    }
                 )
                 if (showDialog) {
                     AlertDialog(
@@ -186,6 +199,63 @@ fun MyTopBar(context: Context) {
                     )
                 }
             }
+            if (showProfileDialog) {
+                Dialog(onDismissRequest = { showProfileDialog = false }) {
+                    Column(
+                        modifier = Modifier
+                            .background(Color.Black, shape = RoundedCornerShape(8.dp))
+                            .padding(16.dp)
+                    ) {
+                        Text("Manage Profiles", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // List of existing profiles
+                        val profiles = listOf("default")
+                        profiles.forEach { profile ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (profile == "default") {
+                                            Toast.makeText(context, "Not Implemented yet.", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            Toast.makeText(context, "Not Implemented yet.", Toast.LENGTH_LONG).show()
+                                        }
+                                        showProfileDialog = false
+                                    }
+                                    .padding(8.dp)
+                            ) {
+                                Text(text = profile, color = Color.White)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Button to create a new profile
+                        var newProfileName by remember { mutableStateOf("") }
+                        TextField(
+                            value = newProfileName,
+                            onValueChange = { newProfileName = it },
+                            label = { Text("New Profile Name") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = {
+                            if (newProfileName.isNotBlank()) {
+                                if (newProfileName == "default") {
+                                    Toast.makeText(context, "Not Implemented yet.", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Not Implemented yet.", Toast.LENGTH_LONG).show()
+                                }
+                                showProfileDialog = false
+                            }
+                        }) {
+                            Text("Create New Profile")
+                        }
+                    }
+                }
+            }
+
             if (showDialog2) {
                 AlertDialog(
                     onDismissRequest = { showDialog2 = false },

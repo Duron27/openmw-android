@@ -4,8 +4,8 @@
     android:layout_height="match_parent">
 
         <!-- Custom Cursor View -->
-        <org.openmw.ui.controls.CustomCursorView
-            android:id="@+id/customCursorView"
+        <org.openmw.ui.controls.ScaleView
+            android:id="@+id/scaleView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_gravity="center" />

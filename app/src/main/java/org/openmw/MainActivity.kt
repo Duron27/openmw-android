@@ -21,13 +21,19 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.openmw.ui.theme.OpenMWTheme
 import org.openmw.utils.CaptureCrash
 import org.openmw.utils.ModValue
 import org.openmw.utils.PermissionHelper
+import org.openmw.utils.UserManageAssets
 import org.openmw.utils.getScreenWidthAndHeight
 import org.openmw.utils.readModValues
 import org.openmw.utils.updateResolutionInConfig
+import java.io.File
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "game_files_prefs")
 
@@ -38,6 +44,7 @@ object GameFilesPreferences {
 @ExperimentalMaterial3Api
 class MainActivity : ComponentActivity() {
 
+    @OptIn(DelicateCoroutinesApi::class)
     @ExperimentalFoundationApi
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -45,6 +52,19 @@ class MainActivity : ComponentActivity() {
 
         PermissionHelper.getManageExternalStoragePermission(this@MainActivity)
         Thread.setDefaultUncaughtExceptionHandler(CaptureCrash())
+
+        // Force the app to wait until this part is finished.
+        runBlocking {
+            launch(Dispatchers.IO) {
+
+                val configDir = File(filesDir, "config")
+                if (!configDir.exists()) {
+                    configDir.mkdirs()
+                }
+
+                UserManageAssets(applicationContext).onFirstLaunch()
+            }.join()
+        }
 
         val (width, height) = getScreenWidthAndHeight(applicationContext)
         updateResolutionInConfig(width, height)
@@ -67,6 +87,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@DelicateCoroutinesApi
 @ExperimentalFoundationApi
 @ExperimentalMaterial3Api
 @Composable

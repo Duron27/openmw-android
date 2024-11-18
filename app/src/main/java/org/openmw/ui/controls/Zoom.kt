@@ -10,7 +10,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
-
+/*
 fun addZoomAndMoveButtons(context: Context, sdlView: View, sdlContainer: FrameLayout) {
 
     var offsetX = 0f
@@ -170,3 +170,6 @@ fun addZoomAndMoveButtons(context: Context, sdlView: View, sdlContainer: FrameLa
     */
 
 }
+
+
+ */

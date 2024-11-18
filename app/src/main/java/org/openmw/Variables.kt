@@ -2,14 +2,10 @@ package org.openmw
 
 import android.app.Application
 import android.os.Environment
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import org.openmw.utils.UserManageAssets
 import java.io.File
 
 val jniLibsArray = arrayOf("GL", "SDL2", "c++_shared", "openal", "openmw")
-val jniLibsArrayNavmesh = arrayOf("SDL2", "c++_shared")
+val jniLibsArrayNavmesh = arrayOf("SDL2", "c++_shared", "libopenmw-navmeshtool.so")
 const val OPENMW_MAIN_LIB = "libopenmw.so"
 const val OPENMW_NAVMESH_LIB = "libopenmw-navmeshtool.so"
 
@@ -33,6 +29,7 @@ object Constants {
     var USER_OPENMW_CFG = ""
     var VERSION_STAMP = ""
     var CRASH_FILE = ""
+
 }
 
 class MyApp : Application() {
@@ -40,9 +37,10 @@ class MyApp : Application() {
     override fun onCreate() {
         super.onCreate()
         app = this
+
         // Set up global paths
-        Constants.USER_FILE_STORAGE = applicationContext.getExternalFilesDir(null)?.absolutePath ?: ""
-        //Constants.USER_FILE_STORAGE = Environment.getExternalStorageDirectory().toString() + "/OpenMW/"
+        //Constants.USER_FILE_STORAGE = applicationContext.getExternalFilesDir(null)?.absolutePath ?: ""
+        Constants.USER_FILE_STORAGE = Environment.getExternalStorageDirectory().toString() + "/OMW/"
         Constants.USER_CONFIG = "${Constants.USER_FILE_STORAGE}/config"
         Constants.USER_SAVES = "${Constants.USER_FILE_STORAGE}/saves"
         Constants.USER_DELTA = "${Constants.USER_FILE_STORAGE}/delta"
@@ -59,18 +57,7 @@ class MyApp : Application() {
         Constants.GLOBAL_CONFIG = File(filesDir, "config").absolutePath
         Constants.VERSION_STAMP = File(filesDir, "stamp").absolutePath
 
-        // Force the app to wait until this part is finished.
-        runBlocking {
-            launch(Dispatchers.IO) {
 
-                val configDir = File(filesDir, "config")
-                if (!configDir.exists()) {
-                    configDir.mkdirs()
-                }
-
-                UserManageAssets(applicationContext).onFirstLaunch()
-            }.join()
-        }
     }
 
     companion object {

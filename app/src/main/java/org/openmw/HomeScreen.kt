@@ -7,18 +7,21 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
@@ -39,11 +42,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.documentfile.provider.DocumentFile
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.openmw.fragments.SettingsFragment
@@ -53,6 +58,7 @@ import org.openmw.utils.BouncingBackground
 import org.openmw.utils.ModValue
 import org.openmw.utils.ModValuesList
 
+@DelicateCoroutinesApi
 @ExperimentalFoundationApi
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -60,6 +66,17 @@ import org.openmw.utils.ModValuesList
 fun HomeScreen(context: Context, modValues: List<ModValue>, navigateToSettings: () -> Unit) {
     val transparentBlack = Color(alpha = 0.6f, red = 0f, green = 0f, blue = 0f)
     val currentContext = LocalContext.current
+    val infiniteTransition = rememberInfiniteTransition(label = "")
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 500
+            ),
+            repeatMode = RepeatMode.Reverse
+        ), label = ""
+    )
     var savedPath by remember { mutableStateOf<String?>(null) }
     val buttonText = if (savedPath.isNullOrEmpty() || savedPath == "Game Files: ") {
         "Select Games Files"
@@ -98,7 +115,7 @@ fun HomeScreen(context: Context, modValues: List<ModValue>, navigateToSettings: 
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = 40.dp, bottom = 80.dp),
+                        .padding(top = 40.dp, bottom = 40.dp),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -111,7 +128,15 @@ fun HomeScreen(context: Context, modValues: List<ModValue>, navigateToSettings: 
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp),
+                            .padding(bottom = 4.dp)
+                            .height(56.dp)
+                            .let {
+                                if (savedPath.isNullOrEmpty() || savedPath == "Game Files: ") {
+                                    it.graphicsLayer(scaleX = pulse, scaleY = pulse)
+                                } else {
+                                    it
+                                }
+                            },
                         shape = RectangleShape,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(alpha = 0.6f, red = 0f, green = 0f, blue = 0f)
@@ -119,7 +144,7 @@ fun HomeScreen(context: Context, modValues: List<ModValue>, navigateToSettings: 
                     ) {
                         Text(text = buttonText, color = Color.White)
                     }
-                    Spacer(modifier = Modifier.width(16.dp))
+
                     ModValuesList(modValues)
                 }
             }

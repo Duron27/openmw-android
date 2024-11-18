@@ -40,10 +40,10 @@ class ModsFragment {
                     val fileName = file.name ?: ""
                     val nameWithoutExtension = fileName.substringBeforeLast(".")
                     val extension = fileName.substringAfterLast(".")
-                    ModValue("content", "$nameWithoutExtension.$extension", index, isChecked = true) // Set isChecked as needed
+                    ModValue(index, "content", "$nameWithoutExtension.$extension", isChecked = true, originalIndex = index + 1) // Set isChecked as needed
                 }.toMutableList()
 
-                modValues.add(ModValue("data", modPath ?: "", modValues.size, isChecked = true)) // Set isChecked as needed
+                modValues.add(ModValue(modValues.size, "data", modPath ?: "", isChecked = true, originalIndex = modValues.size + 1)) // Set isChecked as needed
 
                 writeModValuesToFile(modValues, Constants.USER_OPENMW_CFG, ignoreList)
 
@@ -60,6 +60,7 @@ class ModsFragment {
             showToast(context, "An error occurred while selecting the folder.")
         }
     }
+
 
     private fun showToast(context: Context, message: String) {
         CoroutineScope(Dispatchers.Main).launch {

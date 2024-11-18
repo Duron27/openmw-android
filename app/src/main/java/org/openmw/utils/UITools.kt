@@ -12,21 +12,33 @@ import android.os.Environment
 import android.os.StatFs
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.system.Os
+import android.util.Log
 import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ProgressIndicatorDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
@@ -38,8 +50,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.window.layout.WindowMetrics
 import androidx.window.layout.WindowMetricsCalculator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import org.openmw.Constants
+import org.openmw.EngineActivity
 import org.openmw.R
 import org.openmw.ui.overlay.MemoryInfo
 import java.io.BufferedReader
@@ -130,19 +147,25 @@ fun enableLogcat() {
 }
 
 fun updateResolutionInConfig(width: Int, height: Int) {
+    // Ensure the larger value is assigned to width
+    val (adjustedWidth, adjustedHeight) = if (width > height) width to height else height to width
+
     val file = File(Constants.SETTINGS_FILE)
     val lines = file.readLines().map { line ->
         when {
-            // These are incorrect, I swapped $width and $height so the resolution would be correct. The issue
-            // Starts when you grab the device specs in portrait then the game jumps to landscape.
-            line.startsWith("# Width of screen") -> "# Width recommended for your device = $height"
-            line.startsWith("# Height of screen") -> "# Height recommended for your device = $width"
-            line.startsWith("resolution y = 0") -> "resolution y = $width"
-            line.startsWith("resolution x = 0") -> "resolution x = $height"
+            // Update lines based on the adjusted width and height
+            line.startsWith("# Width of screen") -> "# Width recommended for your device = $adjustedWidth"
+            line.startsWith("# Height of screen") -> "# Height recommended for your device = $adjustedHeight"
+            line.startsWith("resolution y = 0") -> "resolution y = $adjustedHeight"
+            line.startsWith("resolution x = 0") -> "resolution x = $adjustedWidth"
             else -> line
         }
     }
     file.writeText(lines.joinToString("\n"))
+
+    // Update the companion object values
+    EngineActivity.resolutionX = adjustedWidth
+    EngineActivity.resolutionY = adjustedHeight
 }
 
 fun getScreenWidthAndHeight(context: Context): Pair<Int, Int> {
@@ -165,6 +188,48 @@ fun getScreenWidthAndHeight(context: Context): Pair<Int, Int> {
         }
     }
     return Pair(width, height)
+}
+
+@Composable
+fun ProgressWithNavmesh(onComplete: () -> Unit) {
+    val progressFlow = remember { MutableStateFlow(0f) }
+    val navmeshStatus = remember { MutableStateFlow("0.0") }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        val progress by progressFlow.collectAsState()
+        val status by navmeshStatus.collectAsState()
+
+        if (progress < 1f) {
+            CircularProgressIndicator(
+                progress = progress,
+                trackColor = ProgressIndicatorDefaults.circularIndeterminateTrackColor,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(text = "Processing... ${(progress * 100).toInt()}%")
+        } else {
+            Text(text = "Processing complete!")
+            onComplete()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        Log.d("ProgressWithNavmesh", "LaunchedEffect triggered")
+        CoroutineScope(Dispatchers.IO).launch {
+            while (navmeshStatus.value != "Done") {
+                val statusMessage = Os.getenv("NAVMESHTOOL_MESSAGE")
+                if (statusMessage != null) {
+                    navmeshStatus.value = statusMessage
+                    progressFlow.value = statusMessage.toFloat() / 100.0f
+                }
+                delay(50) // Using delay from kotlinx.coroutines
+            }
+            progressFlow.value = 1f
+        }
+    }
 }
 
 @Composable

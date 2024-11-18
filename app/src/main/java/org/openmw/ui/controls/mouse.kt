@@ -1,115 +1,200 @@
 package org.openmw.ui.controls
 
 import android.annotation.SuppressLint
+import android.app.ActionBar.LayoutParams
 import android.content.Context
 import android.graphics.Canvas
 import android.os.SystemClock
 import android.util.AttributeSet
-import android.util.Log
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
 import androidx.core.content.ContextCompat
-import org.openmw.Constants
+import org.libsdl.app.SDLActivity
 import org.openmw.R
-import java.io.File
+import kotlin.math.roundToInt
 
-class CustomCursorView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
-    private var cursorX = 0f
-    private var cursorY = 0f
+class MouseCursor(
+    context: Context,
+    attrs: AttributeSet?
+) : View(context, attrs) {
+    var cursorX = SDLActivity.getMouseX().toFloat()
+    var cursorY = SDLActivity.getMouseY().toFloat()
     private var offsetX = 0f
     private var offsetY = 0f
     var sdlView: View? = null
-    private var isCursorEnabled = true
-
+    private var cursorView: ImageView? = null
     private val cursorIcon = ContextCompat.getDrawable(context, R.drawable.pointer_icon)!!
-    private fun readSettingsFile(): Triple<Int, Int, Float> {
-        val settingsFile = File(Constants.SETTINGS_FILE)
-        var resolutionX = 0
-        var resolutionY = 0
-        var scalingFactor = 1.0f
+    var isCursorVisible = false
 
-        settingsFile.forEachLine { line ->
-            when {
-                line.startsWith("resolution x =") -> resolutionX = line.split("=").last().trim().toInt()
-                line.startsWith("resolution y =") -> resolutionY = line.split("=").last().trim().toInt()
-                line.startsWith("scaling factor =") -> scalingFactor = line.split("=").last().trim().toFloat()
-            }
+    init {
+        setupViews(context)
+    }
+
+    private fun setupViews(context: Context) {
+        cursorView = ImageView(context).apply {
+            setImageDrawable(cursorIcon)
+            visibility = View.GONE
+            layoutParams = LayoutParams(
+                cursorIcon.intrinsicWidth,
+                cursorIcon.intrinsicHeight
+            )
+        }
+        (parent as? FrameLayout)?.addView(cursorView)
+
+        // Container for the buttons
+        val buttonContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            layoutParams = LayoutParams(
+                LayoutParams.WRAP_CONTENT,
+                LayoutParams.WRAP_CONTENT
+            )
         }
 
-        return Triple(resolutionX, resolutionY, scalingFactor)
+        // Button to perform mouse click
+        val clickButton = Button(context).apply {
+            text = "Click"
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            setOnClickListener {
+                val event = MotionEvent.obtain(
+                    SystemClock.uptimeMillis(),
+                    SystemClock.uptimeMillis(),
+                    MotionEvent.ACTION_UP,
+                    cursorX,
+                    cursorY,
+                    0
+                )
+                performMouseClick(event)
+            }
+        }
+        buttonContainer.addView(clickButton)
+
+        // Button to disable cursor
+        val disableButton = Button(context).apply {
+            text = "Disable"
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            setOnClickListener {
+                disableCursor()
+            }
+        }
+        buttonContainer.addView(disableButton)
+
+        // Add the button container to the layout
+        (parent as? FrameLayout)?.addView(buttonContainer)
     }
 
-    private val settings = readSettingsFile()
-    private val resolutionX = settings.first
-    private val resolutionY = settings.second
+    fun enableCursor() {
+        cursorView?.visibility = View.VISIBLE
+        isCursorVisible = true
+    }
+
+    fun disableCursor() {
+        cursorView?.visibility = View.GONE
+        isCursorVisible = false
+    }
 
     fun setCursorPosition(x: Float, y: Float) {
-        cursorX = x.coerceIn(0f, width.toFloat() - cursorIcon.intrinsicWidth)
-        cursorY = y.coerceIn(0f, height.toFloat() - cursorIcon.intrinsicHeight)
-        Log.d("CustomCursorView", "Cursor Position: X=$cursorX, Y=$cursorY")
+        cursorX = x.coerceIn(0f, (parent as View).width.toFloat() - cursorIcon.intrinsicWidth)
+        cursorY = y.coerceIn(0f, (parent as View).height.toFloat() - cursorIcon.intrinsicHeight)
+        cursorView?.layoutParams = (cursorView?.layoutParams as FrameLayout.LayoutParams).apply {
+            leftMargin = cursorX.toInt()
+            topMargin = cursorY.toInt()
+        }
+        cursorView?.requestLayout()
         invalidate()
-    }
-
-    fun performMouseClick() {
-        val adjustedX = cursorX * (resolutionX.toFloat() / width.toFloat())
-        val adjustedY = cursorY * (resolutionY.toFloat() / height.toFloat())
-        val eventDown = MotionEvent.obtain(
-            SystemClock.uptimeMillis(),
-            SystemClock.uptimeMillis(),
-            MotionEvent.ACTION_DOWN,
-            adjustedX,
-            adjustedY,
-            0
-        )
-        val eventUp = MotionEvent.obtain(
-            SystemClock.uptimeMillis(),
-            SystemClock.uptimeMillis(),
-            MotionEvent.ACTION_UP,
-            adjustedX,
-            adjustedY,
-            0
-        )
-        Log.d("CustomCursorView", "Click at X: $adjustedX, Y: $adjustedY")
-        sdlView?.dispatchTouchEvent(eventDown)
-        sdlView?.dispatchTouchEvent(eventUp)
-        eventDown.recycle()
-        eventUp.recycle()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (isCursorEnabled) {
+        if (isCursorVisible) {
             val iconSize = 72
             cursorIcon.setBounds(cursorX.toInt(), cursorY.toInt(), cursorX.toInt() + iconSize, cursorY.toInt() + iconSize)
             cursorIcon.draw(canvas)
         }
     }
 
+    fun performMouseClick(event: MotionEvent) {
+        sdlView?.apply {
+            val viewLocation = IntArray(2)
+            getLocationOnScreen(viewLocation)
+
+            val adjustedX = cursorX
+            val adjustedY = cursorY
+
+            val eventDown = MotionEvent.obtain(
+                SystemClock.uptimeMillis(),
+                SystemClock.uptimeMillis(),
+                MotionEvent.ACTION_DOWN,
+                adjustedX,
+                adjustedY,
+                0
+            )
+            val eventUp = MotionEvent.obtain(
+                SystemClock.uptimeMillis(),
+                SystemClock.uptimeMillis(),
+                MotionEvent.ACTION_UP,
+                adjustedX,
+                adjustedY,
+                0
+            )
+
+            dispatchTouchEvent(eventDown)
+            dispatchTouchEvent(eventUp)
+            eventDown.recycle()
+            eventUp.recycle()
+        }
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.action) {
-            MotionEvent.ACTION_DOWN -> {
-                offsetX = event.x - cursorX
-                offsetY = event.y - cursorY
-                Log.d("CustomCursorView", "Touch Down at X: ${event.x}, Y: ${event.y}")
-                return true
-            }
-            MotionEvent.ACTION_MOVE -> {
-                setCursorPosition(event.x - offsetX, event.y - offsetY)
-                Log.d("CustomCursorView", "Touch Move at X: ${event.x}, Y: ${event.y}")
-                return true
-            }
-            MotionEvent.ACTION_UP -> {
-                offsetX = event.x - cursorX
-                offsetY = event.y - cursorY
-                Log.d("CustomCursorView", "Touch Released at X: ${event.x}, Y: ${event.y}")
-                return true
+        if (isCursorVisible) {
+            cursorView?.let { cursor ->
+                setOnTouchListener { _, motionEvent ->
+                    when (motionEvent.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            offsetX = event.x - cursorX
+                            offsetY = event.y - cursorY
+                            cursor.visibility = View.VISIBLE
+                            false
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            setCursorPosition(event.x - offsetX, event.y - offsetY)
+                            SDLActivity.sendRelativeMouseMotion(offsetX.roundToInt(), offsetY.roundToInt())
+                        }
+                        MotionEvent.ACTION_UP -> {
+                            offsetX = event.x - cursorX
+                            offsetY = event.y - cursorY
+                            performMouseClick(event)
+                        }
+                    }
+                    true
+                }
             }
         }
         return false
     }
 
-    override fun performClick(): Boolean {
-        return super.performClick()
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        cursorView = ImageView(context).apply {
+            setImageDrawable(cursorIcon)
+            visibility = View.GONE
+            layoutParams = FrameLayout.LayoutParams(
+                cursorIcon.intrinsicWidth,
+                cursorIcon.intrinsicHeight
+            )
+        }
+        (parent as? FrameLayout)?.addView(cursorView)
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        (parent as? FrameLayout)?.removeView(cursorView)
     }
 }
+

@@ -57,7 +57,6 @@
         <activity
             android:name="org.openmw.MainActivity"
             android:exported="true"
-            android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize|stateAlwaysVisible"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
             tools:ignore="DiscouragedApi,LockedOrientationActivity">
@@ -89,9 +88,13 @@
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
             tools:ignore="DiscouragedApi" />
         <activity
-            android:name="org.openmw.fragments.NavmeshActivity"
+            android:name="org.openmw.ConfigureControls"
             android:configChanges="keyboardHidden|orientation"
-            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:windowSoftInputMode="adjustResize|stateAlwaysVisible"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
+            tools:ignore="DiscouragedApi" />
 
     </application>
 </manifest>

@@ -20,6 +20,8 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
 
+import org.openmw.EngineActivity;
+
 /**
     SDLSurface. This is what we draw on, so we need to know when it's created
     in order to do anything useful.
@@ -39,9 +41,19 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
     // Is SurfaceView ready for rendering
     public boolean mIsSurfaceReady;
 
+    private int fixedWidth = 0;
+    private int fixedHeight = 0;
+
     // Startup
     public SDLSurface(Context context) {
         super(context);
+        fixedWidth = EngineActivity.Companion.getResolutionX();
+        fixedHeight = EngineActivity.Companion.getResolutionY();
+
+        if (fixedWidth > 0) {
+            getHolder().setFixedSize(fixedWidth, fixedHeight);
+        }
+
         getHolder().addCallback(this);
 
         setFocusable(true);
@@ -60,6 +72,30 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         mHeight = 1.0f;
 
         mIsSurfaceReady = false;
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        int widthSize = MeasureSpec.getSize(widthMeasureSpec);
+        int heightSize = MeasureSpec.getSize(heightMeasureSpec);
+
+        if (fixedWidth > 0) {
+            float myAspect = 1.0f * fixedWidth / fixedHeight;
+            float resultWidth = widthSize;
+            float resultHeight = resultWidth / myAspect;
+            if (resultHeight > heightSize) {
+                resultHeight = heightSize;
+                resultWidth = resultHeight * myAspect;
+            }
+
+            mWidth = resultWidth;
+            mHeight = resultHeight;
+            setMeasuredDimension((int) resultWidth, (int) resultHeight);
+        } else {
+            mWidth = widthSize;
+            mHeight = heightSize;
+            setMeasuredDimension(widthSize, heightSize);
+        }
     }
 
     public void handlePause() {
@@ -84,6 +120,8 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
     public void surfaceCreated(SurfaceHolder holder) {
         Log.v("SDL", "surfaceCreated()");
         SDLActivity.onNativeSurfaceCreated();
+
+        SDLActivity.omwSurfaceRecreated();
     }
 
     // Called when we lose the surface
@@ -97,6 +135,8 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
 
         mIsSurfaceReady = false;
         SDLActivity.onNativeSurfaceDestroyed();
+
+        SDLActivity.omwSurfaceDestroyed();
     }
 
     // Called when the surface is resized
@@ -109,8 +149,6 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
             return;
         }
 
-        mWidth = width;
-        mHeight = height;
         int nDeviceWidth = width;
         int nDeviceHeight = height;
         try
@@ -212,6 +250,10 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         if (touchDevId < 0) {
             touchDevId -= 1;
         }
+
+        if ((action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) &&
+            SDLActivity.isMouseShown() == 0)
+        return false;
 
         // 12290 = Samsung DeX mode desktop mouse
         // 12290 = 0x3002 = 0x2002 | 0x1002 = SOURCE_MOUSE | SOURCE_TOUCHSCREEN

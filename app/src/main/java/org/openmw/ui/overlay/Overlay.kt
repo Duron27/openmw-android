@@ -1,11 +1,10 @@
 package org.openmw.ui.overlay
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
 import android.view.View
-import android.widget.Button
 import android.widget.FrameLayout
-import android.widget.SeekBar
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -18,37 +17,57 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.sharp.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.test.internal.runner.junit4.statement.UiThreadStatement.runOnUiThread
 import kotlinx.coroutines.*
 import org.openmw.ui.controls.ButtonState
-import org.openmw.ui.controls.CustomCursorView
 import org.openmw.ui.controls.DynamicButtonManager
+import org.openmw.ui.controls.MouseCursor
+import org.openmw.ui.controls.ScaleView
 import org.openmw.ui.controls.UIStateManager
-import org.openmw.ui.controls.addZoomAndMoveButtons
+import org.openmw.ui.controls.UIStateManager.configureControls
+import org.openmw.ui.controls.UIStateManager.gridAlpha
+import org.openmw.ui.controls.UIStateManager.gridSize
+import org.openmw.ui.controls.UIStateManager.gridVisible
+import org.openmw.ui.controls.UIStateManager.isCursorVisible
+import org.openmw.ui.controls.UIStateManager.isScaleView
 import org.openmw.utils.*
 import kotlin.math.roundToInt
 
@@ -59,31 +78,29 @@ data class MemoryInfo(
 )
 
 @SuppressLint("RestrictedApi")
-fun toggleCustomCursor(customCursorView: CustomCursorView) {
+fun toggleScaleView(scaleView: ScaleView) {
     runOnUiThread {
-        UIStateManager.isCustomCursorEnabled = !UIStateManager.isCustomCursorEnabled
-        customCursorView.visibility = if (UIStateManager.isCustomCursorEnabled) View.VISIBLE else View.GONE
+        isScaleView = !isScaleView
+        scaleView.visibility = if (isScaleView) View.VISIBLE else View.GONE
     }
 }
 
 @Composable
 fun OverlayUI(
     context: Context,
-    sdlView: View,
-    sdlContainer: FrameLayout,
-    editMode: MutableState<Boolean>,
+    editMode: Boolean,
     createdButtons: SnapshotStateList<ButtonState>,
-    customCursorView: CustomCursorView,
-    addButtonView: (ButtonState, FrameLayout, Context) -> Unit
+    scaleView: ScaleView,
+    mouseCursor: MouseCursor?
 ) {
     var expanded by remember { mutableStateOf(false) }
     val visible = UIStateManager.visible
     val density = LocalDensity.current
-    var isCustomCursorEnabled by remember { mutableStateOf(false) }
-    var zoomButtonsAdded by remember { mutableStateOf(false) }
+    var isScaleView by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+    val logMessages = remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
-        getMessages() // Ensure logcat is enabled
         while (true) {
             if (UIStateManager.isMemoryInfoEnabled) {
                 val memoryInfo = getMemoryInfo(context)
@@ -99,14 +116,15 @@ fun OverlayUI(
                 UIStateManager.batteryStatus = ""
             }
             if (UIStateManager.isLoggingEnabled) {
-                UIStateManager.scrollState.animateScrollTo(UIStateManager.scrollState.maxValue)
-                UIStateManager.logMessages = getMessages().joinToString("\n")
+                logMessages.value = getMessages().joinToString("\n")
+                scrollState.scrollTo(scrollState.maxValue)
             } else {
-                UIStateManager.logMessages = ""
+                logMessages.value = ""
             }
             delay(1000)
         }
     }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Surface(
             color = Color.Transparent,
@@ -142,41 +160,19 @@ fun OverlayUI(
                             .background(Color(alpha = 0.6f, red = 0f, green = 0f, blue = 0f))
                             .padding(5.dp)
                     ) {
-                        LazyRow(
-                            modifier = Modifier
-                                .background(Color(alpha = 0.6f, red = 0f, green = 0f, blue = 0f))
-                                .padding(5.dp)
-                        ) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(4.dp)
-                                        .background(Color.Red, shape = RoundedCornerShape(8.dp))
-                                        .clickable { expanded = false }
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(text = "Close", color = Color.White, fontSize = 20.sp)
-                                }
-                                Spacer(modifier = Modifier.width(20.dp))
-                                ClickableBox("Hide UI", UIStateManager.isUIHidden) {
-                                    UIStateManager.isUIHidden = !UIStateManager.isUIHidden
-                                    UIStateManager.visible = !UIStateManager.isUIHidden
-                                }
-                                ClickableBox("Enable Vibration", UIStateManager.isVibrationEnabled) {
-                                    UIStateManager.isVibrationEnabled = !UIStateManager.isVibrationEnabled
-                                }
-                                ClickableBox("Show Memory Info", UIStateManager.isMemoryInfoEnabled) {
-                                    UIStateManager.isMemoryInfoEnabled = !UIStateManager.isMemoryInfoEnabled
-                                }
-                                ClickableBox("Show Battery Status", UIStateManager.isBatteryStatusEnabled) {
-                                    UIStateManager.isBatteryStatusEnabled = !UIStateManager.isBatteryStatusEnabled
-                                }
-                                ClickableBox("Show Logcat", UIStateManager.isLoggingEnabled) {
-                                    UIStateManager.isLoggingEnabled = !UIStateManager.isLoggingEnabled
-                                }
-                            }
-                        }
+                        PopUpWindow(
+                            expanded = expanded,
+                            context = context,
+                            onClose = { expanded = false },
+                            onToggleUI = {
+                                UIStateManager.isUIHidden = !UIStateManager.isUIHidden
+                                UIStateManager.visible = !UIStateManager.isUIHidden
+                            },
+                            onToggleVibration = { UIStateManager.isVibrationEnabled = !UIStateManager.isVibrationEnabled },
+                            onToggleMemoryInfo = { UIStateManager.isMemoryInfoEnabled = !UIStateManager.isMemoryInfoEnabled },
+                            onToggleBatteryStatus = { UIStateManager.isBatteryStatusEnabled = !UIStateManager.isBatteryStatusEnabled },
+                            onToggleLogcat = { UIStateManager.isLoggingEnabled = !UIStateManager.isLoggingEnabled }
+                        )
                     }
                 } else {
                     Row(
@@ -190,7 +186,6 @@ fun OverlayUI(
                                 .size(30.dp),
                             tint = Color.Black
                         )
-
                         AnimatedVisibility(
                             visible = visible,
                             enter = slideInVertically(
@@ -217,21 +212,26 @@ fun OverlayUI(
                                 onNewButtonAdded = { newButtonState ->
                                     createdButtons.add(newButtonState)
                                 },
-                                editMode = editMode,
-                                createdButtons = createdButtons,
-                                sdlContainer = sdlContainer,
-                                addButtonView = { button, container, ctx -> addButtonView(button, container, ctx) }
+                                editMode = UIStateManager.editMode,
+                                createdButtons = createdButtons
                             )
                             // IconButton to toggle zoom and move buttons
                             IconButton(
                                 onClick = {
-                                    isCustomCursorEnabled = !isCustomCursorEnabled
-                                    toggleCustomCursor(customCursorView)
-                                    if (!zoomButtonsAdded) {
-                                        addZoomAndMoveButtons(context, sdlView, sdlContainer)
-                                        zoomButtonsAdded = true
+                                    isScaleView = !isScaleView
+                                    scaleView.scaleSdlView(isScaleView)
+                                    UIStateManager.isUIHidden = isScaleView
+                                    UIStateManager.visible = !UIStateManager.isUIHidden
+                                    toggleScaleView(scaleView)
+                                    if (isScaleView) {
+                                        // Add exit button to the view
+                                        scaleView.addExitButton()
+                                        //customCursorView.addCursorToggleButton()
+                                    } else {
+                                        // Remove exit button from the view
+                                        scaleView.removeExitButton()
+                                        //customCursorView.removeCursorToggleButton()
                                     }
-                                    updateZoomButtonsVisibility(sdlContainer, isCustomCursorEnabled)
                                 },
                                 colors = IconButtonDefaults.iconButtonColors(
                                     containerColor = Color.Transparent
@@ -239,14 +239,57 @@ fun OverlayUI(
                             ) {
                                 Icon(
                                     Icons.Default.Star,
-                                    contentDescription = "Toggle Custom Cursor",
+                                    contentDescription = "Toggle Zoom",
                                     modifier = Modifier.size(30.dp),
                                     tint = Color.Black
                                 )
                             }
+                            if (UIStateManager.editMode) {
+                                Column {
+                                    // Toggle Grid Visibility Icon
+                                    IconButton(onClick = { gridVisible.value = !gridVisible.value },modifier = Modifier.padding(top = 40.dp)) {
+
+                                        Icon(
+                                            imageVector = if (gridVisible.value) Icons.Default.Edit else Icons.Default.Edit,
+                                            contentDescription = null
+                                        )
+                                    }
+
+                                    // Change Grid Size Icon
+                                    IconButton(onClick = { gridSize.intValue = (gridSize.intValue % 100) + 10 }) {
+                                        Icon(imageVector = Icons.Default.Menu, contentDescription = null)
+                                    }
+
+                                    // Change Grid Alpha Icon
+                                    IconButton(onClick = { gridAlpha.floatValue = if (gridAlpha.floatValue == 0.25f) 0.5f else 0.25f }) {
+                                        Icon(imageVector = Icons.Default.Face, contentDescription = null)
+                                    }
+                                    // IconButton to enable/disable MouseCursor
+                                    IconButton(
+                                        onClick = {
+                                            mouseCursor?.let {
+                                                if (it.isCursorVisible) {
+                                                    it.disableCursor()
+                                                } else {
+                                                    it.enableCursor()
+                                                }
+                                            }
+                                        },
+                                        colors = IconButtonDefaults.iconButtonColors(
+                                        containerColor = Color.Transparent
+                                        )
+                                    ) {
+                                        Icon(
+                                            if (isCursorVisible) Icons.Sharp.Send else Icons.Sharp.Send,
+                                            contentDescription = "Toggle Mouse Cursor",
+                                            modifier = Modifier.size(30.dp),
+                                            tint = Color.Black
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
-
                 }
             }
         }
@@ -259,7 +302,7 @@ fun OverlayUI(
             verticalArrangement = Arrangement.Center
         ) {
             if (UIStateManager.isMemoryInfoEnabled) {
-                DraggableBox(editMode = editMode.value) { fontSize ->
+                DraggableBox(editMode = UIStateManager.editMode) { fontSize ->
                     Text(
                         text = UIStateManager.memoryInfoText,
                         color = Color.White,
@@ -268,9 +311,8 @@ fun OverlayUI(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
-
             if (UIStateManager.isBatteryStatusEnabled) {
-                DraggableBox(editMode = editMode.value) { fontSize ->
+                DraggableBox(editMode = UIStateManager.editMode) { fontSize ->
                     Text(
                         text = UIStateManager.batteryStatus,
                         color = Color.White,
@@ -280,9 +322,9 @@ fun OverlayUI(
                 }
             }
             if (UIStateManager.isLoggingEnabled) {
-                DraggableBox(editMode = editMode.value) { fontSize ->
+                DraggableBox(editMode = UIStateManager.editMode) { fontSize ->
                     Text(
-                        text = UIStateManager.logMessages,
+                        text = logMessages.value,
                         color = Color.White,
                         fontSize = fontSize.sp
                     )
@@ -305,14 +347,16 @@ fun DraggableBox(
     var isDragging by remember { mutableStateOf(false) }
     var isResizing by remember { mutableStateOf(false) }
     var fontSize by remember { mutableFloatStateOf(10f) }
+    val scrollState = rememberScrollState()
 
     Box(
         modifier = Modifier
             .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
             .size(width = boxWidth.dp, height = boxHeight.dp)
             .background(Color.Transparent)
+            //.verticalScroll(scrollState)
             .then(
-                if (editMode) {
+                if (UIStateManager.editMode) {
                     Modifier.pointerInput(Unit) {
                         detectDragGestures(
                             onDragStart = { isDragging = true },
@@ -328,11 +372,11 @@ fun DraggableBox(
             .border(2.dp, if (isDragging || isResizing) Color.Red else Color.Transparent)
             .padding(8.dp)
     ) {
-        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(scrollState), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 content(fontSize)
             }
-            if (editMode) {
+            if (UIStateManager.editMode) {
                 Slider(
                     value = fontSize,
                     onValueChange = { fontSize = it },
@@ -347,7 +391,7 @@ fun DraggableBox(
 
             }
         }
-        if (editMode) {
+        if (UIStateManager.editMode) {
             Box(
                 modifier = Modifier
                     .size(16.dp)
@@ -369,26 +413,148 @@ fun DraggableBox(
     }
 }
 
+// This is the settings window while in-game when you hit the gear icon. (top left)
 @Composable
-fun ClickableBox(text: String, enabled: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .padding(4.dp)
-            .background(Color.White, shape = RoundedCornerShape(8.dp))
-            .clickable { onClick() }
-            .padding(16.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text = text, color = if (enabled) Color.Green else Color.Red, fontSize = 15.sp)
+fun PopUpWindow(
+    expanded: Boolean,
+    context: Context,
+    onClose: () -> Unit,
+    onToggleUI: () -> Unit,
+    onToggleVibration: () -> Unit,
+    onToggleMemoryInfo: () -> Unit,
+    onToggleBatteryStatus: () -> Unit,
+    onToggleLogcat: () -> Unit
+) {
+    val gradientColors = listOf(Color(0xFF42A5F5), Color(0xFF478DE0), Color(0xFF3F76D2), Color(0xFF3B5FBA))
+    if (expanded) {
+        Dialog(onDismissRequest = onClose) {
+            Column(
+                modifier = Modifier
+                    .background(Color(alpha = 0.6f, red = 0f, green = 0f, blue = 0f), shape = RoundedCornerShape(8.dp))
+                    .padding(16.dp)
+            ) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3), // Three columns per row
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxSize()
+                ) {
+                    items(6) { index -> // Adjust the number of items as needed
+                        val (text, enabled) = when (index) {
+                            0 -> "Close" to false
+                            1 -> "Hide UI" to UIStateManager.isUIHidden
+                            2 -> "Enable Vibration" to UIStateManager.isVibrationEnabled
+                            3 -> "Memory\n Info" to UIStateManager.isMemoryInfoEnabled
+                            4 -> "Battery Status" to UIStateManager.isBatteryStatusEnabled
+                            5 -> "Logcat" to UIStateManager.isLoggingEnabled
+                            else -> "" to false
+                        }
+
+                        Card(
+                            onClick = {
+                                when (index) {
+                                    0 -> onClose()
+                                    1 -> onToggleUI()
+                                    2 -> onToggleVibration()
+                                    3 -> onToggleMemoryInfo()
+                                    4 -> onToggleBatteryStatus()
+                                    5 -> onToggleLogcat()
+                                }
+                            },
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .fillMaxWidth()
+                                .aspectRatio(1f) // Ensure circular shape
+                                .border(1.dp, Color.Black, CircleShape)
+                                .background(Brush.linearGradient(gradientColors), CircleShape),
+                            shape = CircleShape,
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.Transparent // Override container color to transparent
+                            ),
+                            elevation = CardDefaults.cardElevation(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize()
+                                .background(Brush.linearGradient(gradientColors), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = text,
+                                    color = if (enabled) Color.Green else Color.Black,
+                                    fontSize = 17.sp,
+                                    textAlign = TextAlign.Center,
+                                    style = TextStyle(
+                                        shadow = Shadow(
+                                            color = Color.Black,
+                                            offset = Offset(2f, 2f),
+                                            blurRadius = 4f
+                                        )
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            // Conditionally display the "Exit to Launcher" button at the bottom center
+            if (configureControls) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Button(
+                        onClick = { (context as? Activity)?.finish() }
+                    ) {
+                        Text("Exit to Launcher")
+                    }
+                }
+            }
+        }
     }
 }
 
-fun updateZoomButtonsVisibility(sdlContainer: FrameLayout, visible: Boolean) {
-    val visibility = if (visible) View.VISIBLE else View.GONE
-    for (i in 0 until sdlContainer.childCount) {
-        val child = sdlContainer.getChildAt(i)
-        if (child is Button || child is SeekBar) { // Assuming only the buttons and sliders are added for zoom and move
-            child.visibility = visibility
+// This is the snap to grid for the UI buttons.
+@Composable
+fun GridOverlay(gridSize: Int, snapX: Float?, snapY: Float?, alpha: Float) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val width = size.width
+        val height = size.height
+        val lineColor = Color.LightGray.copy(alpha = alpha)
+        val dotColor = Color.Red.copy(alpha = alpha)
+        val highlightColor = Color.Red.copy(alpha = 1.0f)
+
+        // Draw vertical lines
+        for (x in 0 until width.toInt() step gridSize) {
+            drawLine(
+                color = lineColor,
+                start = Offset(x.toFloat(), 0f),
+                end = Offset(x.toFloat(), height),
+                strokeWidth = 1.dp.toPx()
+            )
+        }
+
+        // Draw horizontal lines
+        for (y in 0 until height.toInt() step gridSize) {
+            drawLine(
+                color = lineColor,
+                start = Offset(0f, y.toFloat()),
+                end = Offset(width, y.toFloat()),
+                strokeWidth = 1.dp.toPx()
+            )
+        }
+
+        // Draw dots at intersections
+        for (x in 0 until width.toInt() step gridSize) {
+            for (y in 0 until height.toInt() step gridSize) {
+                val color = if (snapX == x.toFloat() && snapY == y.toFloat()) highlightColor else dotColor
+                drawCircle(
+                    color = color,
+                    radius = 2.dp.toPx(),
+                    center = Offset(x.toFloat(), y.toFloat())
+                )
+            }
         }
     }
 }

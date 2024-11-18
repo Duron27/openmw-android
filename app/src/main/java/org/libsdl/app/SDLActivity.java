@@ -178,7 +178,7 @@ public class SDLActivity extends AppCompatActivity implements View.OnSystemUiVis
     public static final boolean mHasMultiWindow = (Build.VERSION.SDK_INT >= 24  /* Android 7.0 (N) */);
 
     // Cursor types
-    // private static final int SDL_SYSTEM_CURSOR_NONE = -1;
+    private static final int SDL_SYSTEM_CURSOR_NONE = -1;
     private static final int SDL_SYSTEM_CURSOR_ARROW = 0;
     private static final int SDL_SYSTEM_CURSOR_IBEAM = 1;
     private static final int SDL_SYSTEM_CURSOR_WAIT = 2;
@@ -941,6 +941,15 @@ public class SDLActivity extends AppCompatActivity implements View.OnSystemUiVis
     public static native void nativeAddTouch(int touchId, String name);
     public static native void nativePermissionResult(int requestCode, boolean result);
     public static native void onNativeLocaleChanged();
+    public static native int getMouseX();
+    public static native int getMouseY();
+    public static native int isMouseShown();
+    public static native void sendRelativeMouseMotion(int x, int y);
+    public static native void sendMouseButton(int state, int button);
+
+    public static native void omwSurfaceDestroyed();
+    public static native void omwSurfaceRecreated();
+
 
     /**
      * This method is called by SDL using JNI.
