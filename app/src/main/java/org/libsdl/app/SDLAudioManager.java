@@ -13,9 +13,6 @@ import android.util.Log;
 
 import java.util.Arrays;
 
-import org.openmw.MainActivity;
-import org.openmw.EngineActivity;
-
 public class SDLAudioManager {
     protected static final String TAG = "SDLAudio";
 

@@ -14,7 +14,7 @@ int stderr = 0; // Hack: fix linker error
 #include <osg/OperationThread>
 
 /*******************************************************************************
- * Functions called by JNI
+ Functions called by JNI
  *******************************************************************************/
 #include <jni.h>
 
@@ -108,4 +108,3 @@ extern "C" void Java_org_libsdl_app_SDLActivity_omwSurfaceRecreated(JNIEnv *env,
     if (win)
         win->windowVisibilityChange(true);
 }
-

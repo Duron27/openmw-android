@@ -1,43 +1,43 @@
 cmake_minimum_required(VERSION 3.2.0)
 
 # https://github.com/libjpeg-turbo/libjpeg-turbo/releases
-set(LIBJPEG_TURBO_VERSION 1.5.3)
-set(LIBJPEG_TURBO_HASH SHA256=b24890e2bb46e12e72a79f7e965f409f4e16466d00e1dd15d93d73ee6b592523)
+set(LIBJPEG_TURBO_VERSION 3.1.0)
+set(LIBJPEG_TURBO_HASH SHA256=9564c72b1dfd1d6fe6274c5f95a8d989b59854575d4bbee44ade7bc17aa9bc93)
 
 # http://www.libpng.org/pub/png/libpng.html
-set(LIBPNG_VERSION 1.6.37)
-set(LIBPNG_HASH SHA256=505e70834d35383537b6491e7ae8641f1a4bed1876dbfe361201fc80868d88ca)
+set(LIBPNG_VERSION 1.6.48)
+set(LIBPNG_HASH SHA256=46fd06ff37db1db64c0dc288d78a3f5efd23ad9ac41561193f983e20937ece03)
 
 # https://www.freetype.org/index.html#news
-set(FREETYPE2_VERSION 2.10.4)
-set(FREETYPE2_HASH SHA256=5eab795ebb23ac77001cfb68b7d4d50b5d6c7469247b0b01b2c953269f658dac)
+set(FREETYPE2_VERSION 2.13.3)
+set(FREETYPE2_HASH SHA256=5c3a8e78f7b24c20b25b54ee575d6daa40007a5f4eea2845861c3409b3021747)
 
 # https://github.com/kcat/openal-soft/releases
-set(OPENAL_VERSION 1.21.1)
-set(OPENAL_HASH SHA256=8ac17e4e3b32c1af3d5508acfffb838640669b4274606b7892aa796ca9d7467f)
+set(OPENAL_VERSION 1.24.3)
+set(OPENAL_HASH SHA256=7e1fecdeb45e7f78722b776c5cf30bd33934b961d7fd2a11e0494e064cc631ce)
 
 # http://www.boost.org/users/download/
-set(BOOST_VERSION 1.83.0)
+set(BOOST_VERSION 1.88.0)
 set(BOOST_HASH SHA256=8f32d4617390d1c2d16f26a27ab60d97807b35440d45891fa340fc2648b04406)
 
 # https://www.ffmpeg.org/download.html
-set(FFMPEG_VERSION 4.4)
-set(FFMPEG_HASH SHA256=42093549751b582cf0f338a21a3664f52e0a9fbe0d238d3c992005e493607d0e)
+set(FFMPEG_VERSION 7.1.1)
+set(FFMPEG_HASH SHA256=0c8da2f11579a01e014fc007cbacf5bb4da1d06afd0b43c7f8097ec7c0f143ba)
 
 # https://www.libsdl.org/download-2.0.php
-set(SDL2_VERSION 2.30.7)
-set(SDL2_HASH SHA256=349268f695c02efbc9b9148a70b85e58cefbbf704abd3e91be654db7f1e2c863)
+set(SDL2_VERSION 2.32.4)
+set(SDL2_HASH SHA256=f15b478253e1ff6dac62257ded225ff4e7d0c5230204ac3450f1144ee806f934)
 
 # https://github.com/bulletphysics/bullet3/releases
-set(BULLET_VERSION 3.17)
-set(BULLET_HASH SHA256=baa642c906576d4d98d041d0acb80d85dd6eff6e3c16a009b1abf1ccd2bc0a61)
+set(BULLET_VERSION 3.25)
+set(BULLET_HASH SHA256=c45afb6399e3f68036ddb641c6bf6f552bf332d5ab6be62f7e6c54eda05ceb77)
 
 # https://github.com/MyGUI/mygui/releases
 set(MYGUI_VERSION 3.4.3)
 set(MYGUI_HASH SHA256=d1d5f294670ae71f7200ed4b30859018281d8cfd45d6a38d18b97a4aba604c42)
 
-# https://github.com/sisah2/gl4es/releases
-set(GL4ES_VERSION 37bdc17da1bb281b7010f7c41323a5f0ccdae987)
+# https://github.com/sisah2/ng_gl4es/releases
+set(GL4ES_VERSION 9ce0f6cb8aaca01c697d87c4ccf06a0a014bdbc6)
 set(GL4ES_HASH SHA256=b565e717c7d192e936bda25f3cb90ad8db398af56414ec08294b6716574c1a6d)
 
 # https://github.com/openscenegraph/OpenSceneGraph/releases
@@ -56,7 +56,7 @@ set(LIBICU_VERSION 70-1)
 set(LIBICU_HASH SHA256=4013d7aff8a34bae410664bdb16554d7eda03654b22627b9284ab55a685492d4)
 
 # https://github.com/OpenMW/openmw/commits/master
-set(OPENMW_VERSION d66062f028fffdd86e2ecd471994b79b7bf3bd5f)
+set(OPENMW_VERSION 587923f69b73d23c82aa293fbb0bd1129e6a9496)
 set(OPENMW_HASH SHA256=44d044ad0a5546216fe611fe92c37065bb07e2efeeeaac4f049dae03df313186)
 
 # End of configurable options
@@ -80,8 +80,9 @@ set(COMMON_CMAKE_ARGS
 	-DANDROID_STL=c++_shared
 	-DANDROID_LD=deprecated
 	-DANDROID_CPP_FEATURES=rtti\ exceptions
-	-DCMAKE_C_FLAGS=-DMYGUI_DONT_REPLACE_NULLPTR\ -I${prefix}/include/\ $ENV{CFLAGS}
-	-DCMAKE_CXX_FLAGS=-DMYGUI_DONT_REPLACE_NULLPTR\ -I${prefix}/include/\ $ENV{CXXFLAGS}
+	-DANDROID_ALLOW_UNDEFINED_VERSION_SCRIPT_SYMBOLS=ON
+	-DCMAKE_C_FLAGS=-I${prefix}/include/\ $ENV{CFLAGS}
+	-DCMAKE_CXX_FLAGS=-I${prefix}/include/\ $ENV{CXXFLAGS}
 	-DCMAKE_SHARED_LINKER_FLAGS=$ENV{LDFLAGS}
 	-DCMAKE_BUILD_TYPE=${BUILD_TYPE}
 	-DCMAKE_DEBUG_POSTFIX=
@@ -126,25 +127,19 @@ if (${ARCH} STREQUAL "arm")
 	set(ffmpeg_configure_flags ${ffmpeg_configure_flags} --enable-thumb)
 endif()
 
-# on x86 enabling simd results in text relocations, which are banned on Android
-set(libjpeg_turbo_flags "")
-if (${ARCH} STREQUAL "x86")
-	set(libjpeg_turbo_flags ${libjpeg_turbo_flags} --without-simd)
-endif()
-
 ExternalProject_Add(libjpeg-turbo
-	URL https://sourceforge.net/projects/libjpeg-turbo/files/${LIBJPEG_TURBO_VERSION}/libjpeg-turbo-${LIBJPEG_TURBO_VERSION}.tar.gz/download
+	URL https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/${LIBJPEG_TURBO_VERSION}/libjpeg-turbo-${LIBJPEG_TURBO_VERSION}.tar.gz
 	https://github.com/xyzz/openmw-deps/releases/download/v0/libjpeg-turbo-${LIBJPEG_TURBO_VERSION}.tar.gz
 	URL_HASH ${LIBJPEG_TURBO_HASH}
 	DOWNLOAD_DIR ${download_dir}
 
-	CONFIGURE_COMMAND ${wrapper_command} <SOURCE_DIR>/configure
-	${COMMON_AUTOCONF_FLAGS}
-	${libjpeg_turbo_flags}
+	CONFIGURE_COMMAND ${wrapper_command} cmake <SOURCE_DIR>
+	${COMMON_CMAKE_ARGS}
+	-DENABLE_SHARED=false
 
 	BUILD_COMMAND ${wrapper_command} $(MAKE) PROGRAMS=
 
-	INSTALL_COMMAND ${wrapper_command} $(MAKE) install-libLTLIBRARIES install-data-am
+	INSTALL_COMMAND ${wrapper_command} $(MAKE) install
 )
 
 ExternalProject_Add(libpng
@@ -219,14 +214,18 @@ ExternalProject_Add(openal
 )
 
 ExternalProject_Add(boost
-	URL https://github.com/boostorg/boost/releases/download/boost-1.86.0/boost-1.86.0-cmake.tar.gz
+	URL https://github.com/boostorg/boost/releases/download/boost-1.88.0/boost-1.88.0-cmake.tar.gz
 	#URL_HASH ${BOOST_HASH}
 	DOWNLOAD_DIR ${download_dir}
 
 #        BUILD_IN_SOURCE 1
+	PATCH_COMMAND patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/system.diff &&
+	PATCH_COMMAND patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/regex.diff
 
 	CONFIGURE_COMMAND ${wrapper_command} cmake <SOURCE_DIR>
 	${COMMON_CMAKE_ARGS}
+	-DCMAKE_CXX_FLAGS=-I<SOURCE_DIR>/libs/core/include/\  $ENV{CXXFLAGS}
+	-DBOOST_INCLUDE_LIBRARIES="filesystem;program_options;iostreams;geometry;system;regex"
 
 #FIXME: Doesnt work for some reason, need to compile everything :(, need newer cmake version?
 #	-DBOOST_INCLUDE_LIBRARIES=filesystem;program_options;iostreams
@@ -240,6 +239,7 @@ ExternalProject_Add(boost
 	COMMAND llvm-ranlib ${prefix}/lib/libboost_filesystem.a
 	COMMAND llvm-ranlib ${prefix}/lib/libboost_program_options.a
 	COMMAND llvm-ranlib ${prefix}/lib/libboost_iostreams.a
+	COMMAND llvm-ranlib ${prefix}/lib/libboost_system.a
 )
 
 ExternalProject_Add(ffmpeg
@@ -305,6 +305,7 @@ ExternalProject_Add(sdl2
 	COMMAND cp -r <SOURCE_DIR>/include ${prefix}/
 )
 
+
 ExternalProject_Add(bullet
 	URL https://github.com/bulletphysics/bullet3/archive/${BULLET_VERSION}.tar.gz
 	https://github.com/xyzz/openmw-deps/releases/download/v0/bullet3-${BULLET_VERSION}.tar.gz
@@ -327,18 +328,21 @@ ExternalProject_Add(bullet
 	INSTALL_COMMAND $(MAKE) install
 )
 
-ExternalProject_Add(gl4es
-	URL https://github.com/sisah2/gl4es/archive/${GL4ES_VERSION}.tar.gz
+ExternalProject_Add(NG-GL4ES
+	URL https://github.com/sisah2/NG-GL4ES/archive/${GL4ES_VERSION}.tar.gz
 	#URL_HASH ${GL4ES_HASH}
 	DOWNLOAD_DIR ${download_dir}
 
-	CONFIGURE_COMMAND ""
+        BUILD_IN_SOURCE 1
+	
+	CONFIGURE_COMMAND ${wrapper_command} cmake <SOURCE_DIR>
+	${COMMON_CMAKE_ARGS}
 
-	BUILD_COMMAND ${wrapper_command} ndk-build
-	${COMMON_NDK_BUILD_FLAGS}
+	BUILD_COMMAND ${wrapper_command} $(MAKE)
 
 	INSTALL_COMMAND mkdir -p ${prefix}/lib/
-	COMMAND cp libs/${app_abi}/libGL.so ${prefix}/lib/
+	COMMAND cp libng_gl4es.so ${prefix}/lib/
+	COMMAND cp <SOURCE_DIR>/libraries/arm64-v8a/libspirv-cross-c-shared.so ${prefix}/lib/
 	COMMAND cp -r <SOURCE_DIR>/include ${prefix}/include/gl4es/
 	COMMAND cp -r <SOURCE_DIR>/include ${prefix}/
 )
@@ -461,13 +465,11 @@ ExternalProject_Add(libcollada
 
 	CONFIGURE_COMMAND ${wrapper_command} cmake <SOURCE_DIR>
 	${COMMON_CMAKE_ARGS}
-#	-DBoost_USE_STATIC_LIBS=ON
-#	-DBoost_USE_STATIC_RUNTIME=ON
-#	-DBoost_NO_SYSTEM_PATHS=OFF
-#	-DBoost_INCLUDE_DIR=${prefix}/include
-	-DHAVE_STRTOQ=0
-	-DUSE_FILE32API=1
-	-DCMAKE_CXX_FLAGS=-std=gnu++11\ -I${prefix}/include/\ $ENV{CXXFLAGS}\ -DNO_BOOST\ -DNO_ZAE
+	-DBoost_USE_STATIC_LIBS=ON
+	-DBoost_USE_STATIC_RUNTIME=ON
+	-DBoost_NO_SYSTEM_PATHS=ON
+	-DBoost_INCLUDE_DIR=${prefix}/include
+	-DCMAKE_CXX_FLAGS=-Dauto_ptr=unique_ptr\ $ENV{CXXFLAGS}
 
 	BUILD_COMMAND ${wrapper_command} $(MAKE)
 
@@ -475,7 +477,7 @@ ExternalProject_Add(libcollada
 )
 
 set(OSG_COMMON
-	-DOPENGL_PROFILE="GL1"
+	-DOPENGL_PROFILE="GL2"
 	-DDYNAMIC_OPENTHREADS=OFF
 	-DDYNAMIC_OPENSCENEGRAPH=OFF
 	-DBUILD_OSG_PLUGIN_OSG=ON
@@ -489,26 +491,24 @@ set(OSG_COMMON
 	-DJPEG_INCLUDE_DIR=${prefix}/include/
 	-DPNG_INCLUDE_DIR=${prefix}/include/
 	-DFREETYPE_DIR=${prefix}
-        -DCOLLADA_INCLUDE_DIR=${prefix}/include/collada-dom2.5
-        -DCOLLADA_DIR=${prefix}/include/collada-dom2.5/1.4
+	-DCOLLADA_INCLUDE_DIR=${prefix}/include/collada-dom2.5
+	-DCOLLADA_DIR=${prefix}/include/collada-dom2.5/1.4
 	-DOSG_CPP_EXCEPTIONS_AVAILABLE=TRUE
 	-DOSG_GL1_AVAILABLE=ON
-	-DOSG_GL2_AVAILABLE=OFF
+	-DOSG_GL2_AVAILABLE=ON
 	-DOSG_GL3_AVAILABLE=OFF
 	-DOSG_GLES1_AVAILABLE=OFF
-	-DOSG_GLES2_AVAILABLE=OFF
+	-DOSG_GLES3_AVAILABLE=OFF
 	-DOSG_GL_LIBRARY_STATIC=OFF
-	-DOSG_GL_DISPLAYLISTS_AVAILABLE=OFF
+	-DOSG_GL_DISPLAYLISTS_AVAILABLE=ON
 	-DOSG_GL_MATRICES_AVAILABLE=ON
 	-DOSG_GL_VERTEX_FUNCS_AVAILABLE=ON
 	-DOSG_GL_VERTEX_ARRAY_FUNCS_AVAILABLE=ON
 	-DOSG_GL_FIXED_FUNCTION_AVAILABLE=ON
 	-DBUILD_OSG_APPLICATIONS=OFF
 	-DBUILD_OSG_PLUGINS_BY_DEFAULT=OFF
-	-DBUILD_OSG_DEPRECATED_SERIALIZERS=OFF
-	#-DOPENGL_opengl_LIBRARY=${prefix}/lib/libGL.so
-	#-DOPENGL_glx_LIBRARY=${prefix}/lib/libGL.so
-	#-DOPENGL_INCLUDE_DIR=${prefix}/include/gl4es/
+	-DOPENGL_gl_LIBRARY=${prefix}/lib/libng_gl4es.so
+	-DCMAKE_CXX_FLAGS=-Dauto_ptr=unique_ptr\ -I${prefix}/include/\ $ENV{CXXFLAGS}
 )
 
 set(OSG_PATCH
@@ -520,15 +520,15 @@ set(OSG_PATCH
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/osg/0004-IncrementalCompileOperation-wrap-some-stuff-in-atomi.patch &&
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/osg/force-add-plugins.patch &&
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/osg/dae_collada.patch &&
-	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/osg/mipmaps.patch &&
+	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/osg/ng-gl4es.patch &&
+#	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/osg/cubic-filtering.patch &&
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/osg/0005-CullSettings-make-inheritanceMask-atomic-to-silence-.patch
 )
 
 ExternalProject_Add(osg
-	DEPENDS libjpeg-turbo libpng gl4es freetype2 libcollada
+	DEPENDS libjpeg-turbo libpng NG-GL4ES freetype2 libcollada
 
 	URL https://github.com/openmw/osg/archive/${OSG_VERSION}.tar.gz
-#	URL_HASH ${OSG_HASH}
 	DOWNLOAD_DIR ${download_dir}
 
 	PATCH_COMMAND ${OSG_PATCH}
@@ -559,16 +559,24 @@ set(OPENMW_COMMON
 	-DOPENMW_USE_SYSTEM_SQLITE3=OFF
 	-DOPENMW_USE_SYSTEM_YAML_CPP=OFF
 	-DOPENMW_USE_SYSTEM_ICU=ON
+ 	#-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
+ 	#-DCMAKE_POLICY_DEFAULT_CMP0069=NEW
+	#-DOPENMW_LTO_BUILD=1
+	-DOPENGL_gl_LIBRARY=${prefix}/lib/libng_gl4es.so
+	-DOPENGL_glx_LIBRARY=${prefix}/lib/libng_gl4es.so
+	-DOPENGL_INCLUDE_DIR=${prefix}/include/gl4es/
+	#-DOPENMW_GL4ES_MANUAL_INIT=ON
 	-DOPENAL_INCLUDE_DIR=${prefix}/include/AL/
 	-DBullet_INCLUDE_DIR=${prefix}/include/bullet/
 	-DOSG_STATIC=TRUE
+	-DCMAKE_CXX_FLAGS=-std=gnu++20\ -I${prefix}/include/\ $ENV{CXXFLAGS}
 	-DMyGUI_LIBRARY=${prefix}/lib/libMyGUIEngineStatic.a
 )
 
 set(OPENMW_PATCH
-        #patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/openmw/0001-loadingscreen-disable-for-now.patch &&
+        patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/openmw/0001-loadingscreen-disable-for-now.patch &&
+        patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/openmw/0009-windowmanagerimp-always-show-mouse-when-possible-pat.patch &&
         patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/openmw/androidPath.patch &&
-        #patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/openmw/0009-windowmanagerimp-always-show-mouse-when-possible-pat.patch &&
         #patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/openmw/0010-android-fix-context-being-lost-on-app-minimize.patch &&
 	cp ${CMAKE_SOURCE_DIR}/patches/openmw/android_main.cpp <SOURCE_DIR>/apps/openmw/android_main.cpp
 )

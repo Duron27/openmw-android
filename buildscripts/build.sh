@@ -189,6 +189,12 @@ find build/$ARCH/openmw-prefix/ -iname "libopenmw.so" -exec cp "{}" ../app/src/m
 # copy delta_plugin to lib location
 cp tool/libdelta_plugin.so ../app/src/main/jniLibs/$ABI/
 
+# copy S3LightFixes to lib location
+cp tool/libS3LightFixes.so ../app/src/main/jniLibs/$ABI/
+
+# copy uqm to lib location
+cp tool/libuqm.so ../app/src/main/jniLibs/$ABI/
+
 # copy over libs we compiled
 cp prefix/$ARCH/lib/{libopenal,libSDL2,libGL,libcollada-dom2.5-dp}.so ../app/src/main/jniLibs/$ABI/
 

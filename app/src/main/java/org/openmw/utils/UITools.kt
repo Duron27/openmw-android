@@ -1,69 +1,193 @@
 package org.openmw.utils
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.content.Context
-import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.graphics.Point
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
+import android.os.Process
 import android.os.StatFs
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.system.Os
-import android.util.Log
-import android.view.WindowInsets
 import android.view.WindowManager
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ProgressIndicatorDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.window.layout.WindowMetrics
-import androidx.window.layout.WindowMetricsCalculator
-import kotlinx.coroutines.CoroutineScope
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import coil.compose.rememberImagePainter
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.openmw.Constants
-import org.openmw.EngineActivity
 import org.openmw.R
+import org.openmw.ui.controls.UIStateManager
+import org.openmw.ui.controls.UIStateManager.cpuUsageFlow
+import org.openmw.ui.controls.UIStateManager.customColor
+import org.openmw.ui.controls.UIStateManager.logMessagesFlow
+import org.openmw.ui.controls.UIStateManager.memoryInfoFlow
 import org.openmw.ui.overlay.MemoryInfo
+import org.openmw.utils.GameFilesPreferences.readCodeGroup
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
+import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.pow
+import kotlin.math.sin
+
+data class LogEntry(
+    val message: String,
+    val textSize: Int,
+    val textColor: Color
+)
+
+object LogRepository {
+    private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
+    val logs: StateFlow<List<LogEntry>> get() = _logs
+
+    fun addLog(message: String, textSize: Int = 12, textColor: Color = Color.White) {
+        val logEntry = LogEntry(message, textSize, textColor)
+        _logs.value = _logs.value + logEntry
+    }
+}
+
+fun addCustomLog(message: String, textSize: Int = 12, textColor: Color = Color.White) {
+    LogRepository.addLog(message, textSize, textColor)
+}
+
+@Composable
+fun LogsBox(logs: StateFlow<List<LogEntry>>, fontSize: Float, boxWidth: Float, boxHeight: Float) {
+    val logList by logs.collectAsState()
+    val lazyListState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    // Auto scroll to bottom when content changes
+    LaunchedEffect(logList.size) {
+        if (logList.isNotEmpty()) {
+            coroutineScope.launch {
+                lazyListState.animateScrollToItem(logList.size - 1)
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .width(boxWidth.dp)
+            .height(boxHeight.dp)
+            .background(Color.Transparent)
+            .padding(8.dp)
+    ) {
+        LazyColumn(state = lazyListState) {
+            items(logList) { log ->
+                Text(
+                    text = log.message,
+                    color = log.textColor,
+                    fontSize = fontSize.sp,
+                    style = TextStyle(fontWeight = FontWeight.Normal)
+                )
+            }
+        }
+    }
+}
+
+// Function to start logging updates
+@DelicateCoroutinesApi
+fun startLoggingUpdates() {
+    GlobalScope.launch {
+        while (UIStateManager.isLoggingEnabled) {
+            val logMessages = getMessages().joinToString("\n")
+            logMessagesFlow.value = logMessages
+            delay(2000)
+        }
+        logMessagesFlow.value = ""
+    }
+}
+
+// Function to start memory and CPU info updates
+@DelicateCoroutinesApi
+fun startResourceInfoUpdates(context: Context) {
+    GlobalScope.launch {
+        while (UIStateManager.isMemoryInfoEnabled) {
+            val memoryInfo = getMemoryInfo(context)
+            val cpuUsage = getCpuProcessUsage()
+            //val gpuUsage = getGpuUsage() // Fetch GPU usage info
+
+            memoryInfoFlow.value = """
+                Total Device Memory: ${memoryInfo.totalMemory}
+                Available Memory: ${memoryInfo.availableMemory}
+                Total Used Memory: ${memoryInfo.usedMemory}
+                CPU Usage: ${cpuUsage}%                
+            """.trimIndent()
+            cpuUsageFlow.value = cpuUsage
+            delay(1000)
+        }
+        memoryInfoFlow.value = ""
+        cpuUsageFlow.value = 0
+    }
+}
 
 @Suppress("DEPRECATION")
 fun vibrate(context: Context) {
@@ -75,16 +199,50 @@ fun vibrate(context: Context) {
     }
 }
 
-fun getAvailableStorageSpace(context: Context): String {
+fun getDirectorySize(directory: File): Long {
+    var totalSize: Long = 0
+    if (directory.isDirectory) {
+        val files = directory.listFiles()
+        if (files != null) {
+            for (file in files) {
+                totalSize += try {
+                    if (file.isDirectory) getDirectorySize(file) else file.length()
+                } catch (_: SecurityException) {
+                    // If we encounter a security exception, we ignore the size of that particular file/directory
+                    0
+                }
+            }
+        }
+    }
+    return totalSize
+}
+
+fun getCpuProcessUsage(): Int {
+    try {
+        val pid = Process.myPid().toString()
+        val cores = Runtime.getRuntime().availableProcessors()
+        val process = Runtime.getRuntime().exec("top -n 1 -o PID,%CPU")
+        val bufferedReader = BufferedReader(InputStreamReader(process.inputStream))
+        var line = bufferedReader.readLine()
+        while (line != null) {
+            if (line.contains(pid)) {
+                val rawCpu = line.split(" ").last().toInt()
+                return rawCpu / cores
+            }
+            line = bufferedReader.readLine()
+        }
+    } catch (_: Exception) {
+        return 0
+    }
+    return 0
+}
+
+fun getAvailableStorageSpace(): String {
     val storageDirectory = Environment.getExternalStorageDirectory()
     val stat = StatFs(storageDirectory.toString())
     val availableBytes = stat.availableBytes
     return humanReadableByteCountBin(availableBytes)
 }
-
-// Get storage space
-//val availableSpace = getAvailableStorageSpace(this)
-//println("Available storage space: $availableSpace bytes")
 
 fun getMemoryInfo(context: Context): MemoryInfo {
     val memoryInfo = ActivityManager.MemoryInfo()
@@ -119,7 +277,7 @@ fun getBatteryStatus(context: Context): String {
 fun getMessages(): List<String> {
     val logMessages = mutableListOf<String>()
     try {
-        val process = Runtime.getRuntime().exec("logcat -d")
+        val process = Runtime.getRuntime().exec("logcat -d *:E") // Only show errors
         val bufferedReader = BufferedReader(InputStreamReader(process.inputStream))
 
         var line: String?
@@ -154,87 +312,265 @@ fun updateResolutionInConfig(width: Int, height: Int) {
     val lines = file.readLines().map { line ->
         when {
             // Update lines based on the adjusted width and height
-            line.startsWith("# Width of screen") -> "# Width recommended for your device = $adjustedWidth"
-            line.startsWith("# Height of screen") -> "# Height recommended for your device = $adjustedHeight"
+            line.startsWith("# Width recommended for your device") -> "# Width recommended for your device = $adjustedWidth"
+            line.startsWith("# Height recommended for your device") -> "# Height recommended for your device = $adjustedHeight"
             line.startsWith("resolution y = 0") -> "resolution y = $adjustedHeight"
             line.startsWith("resolution x = 0") -> "resolution x = $adjustedWidth"
             else -> line
         }
     }
     file.writeText(lines.joinToString("\n"))
-
-    // Update the companion object values
-    EngineActivity.resolutionX = adjustedWidth
-    EngineActivity.resolutionY = adjustedHeight
 }
 
-fun getScreenWidthAndHeight(context: Context): Pair<Int, Int> {
-    val windowMetrics: WindowMetrics = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(context)
-    val bounds = windowMetrics.bounds
-    var width = bounds.width()
-    var height = bounds.height()
+fun WindowManager.currentDeviceRealSize(): Pair<Int, Int> {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        Pair(
+            currentWindowMetrics.bounds.width(),
+            currentWindowMetrics.bounds.height()
+        )
+    } else {
+        val size = Point()
+        @Suppress("DEPRECATION")
+        defaultDisplay.getRealSize(size)
+        Pair(size.x, size.y)
+    }
+}
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-        val windowManager = context.getSystemService(WINDOW_SERVICE) as WindowManager
-        val windowInsets: WindowInsets = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            windowManager.currentWindowMetrics.windowInsets
-        } else {
-            TODO("VERSION.SDK_INT < R")
-        }
-        val displayCutout = windowInsets.displayCutout
-        if (displayCutout != null) {
-            width += displayCutout.safeInsetLeft + displayCutout.safeInsetRight
-            height += displayCutout.safeInsetTop + displayCutout.safeInsetBottom
+@Suppress("DEPRECATION")
+@Composable
+fun CustomProgressIndicator(progress: Float) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.size(100.dp)
+    ) {
+        CircularProgressIndicator(
+            progress = progress,
+            strokeWidth = 8.dp,
+            modifier = Modifier.size(100.dp),
+            trackColor = ProgressIndicatorDefaults.circularIndeterminateTrackColor,
+        )
+
+        // Checkmark Image with Dynamic Alpha
+        if (progress >= 0.95f) {
+            val adjustedAlpha = (progress - 0.95f) / 0.05f
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = "Checkmark",
+                tint = Color.Green.copy(alpha = adjustedAlpha),
+                modifier = Modifier.size(60.dp) // Adjust size as needed
+            )
         }
     }
-    return Pair(width, height)
 }
 
+fun hasInternetPermission(context: Context): Boolean {
+    return ContextCompat.checkSelfPermission(context, Manifest.permission.INTERNET) == PackageManager.PERMISSION_GRANTED
+}
+
+@Suppress("DEPRECATION")
 @Composable
 fun ProgressWithNavmesh(onComplete: () -> Unit) {
     val progressFlow = remember { MutableStateFlow(0f) }
     val navmeshStatus = remember { MutableStateFlow("0.0") }
+    val fileSizeFlow = remember { MutableStateFlow(0L) }
+    val memoryInfoFlow = remember { MutableStateFlow(MemoryInfo("", "", "")) }
+    val context = LocalContext.current
+    val availableSpace = getAvailableStorageSpace()
+    val logLinesFlow = remember { MutableStateFlow<List<String>>(emptyList()) }
+    val scrollState = rememberScrollState()
+    val progress by progressFlow.collectAsState()
+    val fileSize by fileSizeFlow.collectAsState()
+    val memoryInfo by memoryInfoFlow.collectAsState()
+    val logLines by logLinesFlow.collectAsState()
+    var detailedLogs by remember { mutableStateOf(false) }
+    var cpuUsage by remember { mutableIntStateOf(0) }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+    Row(
+        modifier = Modifier
+            .wrapContentSize(),
     ) {
-        val progress by progressFlow.collectAsState()
-        val status by navmeshStatus.collectAsState()
+        Box(
+            modifier = Modifier
+                .wrapContentSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .wrapContentSize()
+                    .padding(16.dp)
+                    .background(Color.Black, shape = RoundedCornerShape(8.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
 
-        if (progress < 1f) {
-            CircularProgressIndicator(
-                progress = progress,
-                trackColor = ProgressIndicatorDefaults.circularIndeterminateTrackColor,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "Processing... ${(progress * 100).toInt()}%")
-        } else {
-            Text(text = "Processing complete!")
-            onComplete()
+                if (progress < 1f) {
+                    Text("CPU Usage: $cpuUsage%", color = Color.White)
+                    CustomProgressIndicator(progress = progress)
+                    Spacer(modifier = Modifier.height(32.dp))
+                    Text(
+                        text = "Building Navmesh... ${(progress * 100).toInt()}%",
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "File size: ${fileSize / 1024} KB \nFree Space: $availableSpace bytes \nMemory: ${memoryInfo.usedMemory} / ${memoryInfo.totalMemory}",
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(text = "Navmesh Details", color = Color.White)
+                        Switch(
+                            checked = detailedLogs,
+                            onCheckedChange = { detailedLogs = it },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Green)
+                        )
+                    }
+                } else {
+                    Text(text = "Navmesh complete!", color = Color.White)
+                    onComplete()
+                }
+            }
+        }
+        if (detailedLogs) {
+            Box(
+                modifier = Modifier
+                    .wrapContentSize()
+                    .verticalScroll(scrollState)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .background(Color.Black, shape = RoundedCornerShape(8.dp))
+                ) {
+                    logLines.forEach { line ->
+                        Text(text = line, color = Color.White)
+                    }
+                }
+            }
         }
     }
-
     LaunchedEffect(Unit) {
-        Log.d("ProgressWithNavmesh", "LaunchedEffect triggered")
-        CoroutineScope(Dispatchers.IO).launch {
+        //Log.d("ProgressWithNavmesh", "LaunchedEffect triggered")
+        launch(Dispatchers.IO) {
+
             while (navmeshStatus.value != "Done") {
                 val statusMessage = Os.getenv("NAVMESHTOOL_MESSAGE")
                 if (statusMessage != null) {
                     navmeshStatus.value = statusMessage
                     progressFlow.value = statusMessage.toFloat() / 100.0f
                 }
-                delay(50) // Using delay from kotlinx.coroutines
+
+                // Update file size
+                val file = File("${Constants.USER_FILE_STORAGE}/navmesh.db")
+                if (file.exists()) {
+                    fileSizeFlow.value = file.length()
+                }
+
+                // Update memory info
+                memoryInfoFlow.value = getMemoryInfo(context)
+
+                // Read navmeshtool.log
+                val logFile = File("${Constants.USER_CONFIG}/navmeshtool.log")
+                if (logFile.exists()) {
+                    val lines = logFile.readLines()
+                    //Log.d("LogLines", "Read ${lines.size} lines from navmeshtool.log")
+                    logLinesFlow.value = lines
+                }
+
+                // Update CPU usage
+                val usage = getCpuProcessUsage()
+                withContext(Dispatchers.Main) {
+                    cpuUsage = usage
+                }
+
+                delay(50)
             }
             progressFlow.value = 1f
+
         }
+    }
+    LaunchedEffect(logLines.size) { scrollState.animateScrollTo(scrollState.maxValue) }
+}
+
+@Suppress("DEPRECATION")
+@Composable
+fun NoneBackground() {
+    val context = LocalContext.current
+    val codeGroupOption by readCodeGroup(context).collectAsState(initial = "OpenMW")
+    val image: Painter = when (codeGroupOption) {
+        "OpenMW" -> rememberImagePainter(data = "file:${Constants.USER_UI}/backgroundbouncebw.jpg")
+        "UQM" -> rememberImagePainter(data = "file:${Constants.USER_UI}/starmap.jpg")
+        else -> painterResource(id = R.drawable.backgroundbouncebw)
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(
+            painter = image,
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .background(color = customColor)
+        )
     }
 }
 
+@Suppress("DEPRECATION")
+@Composable
+fun RotatingImageBackground() {
+    val context = LocalContext.current
+    val codeGroupOption by readCodeGroup(context).collectAsState(initial = "OpenMW")
+    val image: Painter = when (codeGroupOption) {
+        "OpenMW" -> rememberImagePainter(data = "file:${Constants.USER_UI}/backgroundbouncebw.jpg")
+        "UQM" -> rememberImagePainter(data = "file:${Constants.USER_UI}/starmap.jpg")
+        else -> painterResource(id = R.drawable.backgroundbouncebw)
+    }
+
+    // Create an infinite transition for rotation
+    val infiniteTransition = rememberInfiniteTransition()
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            tween(durationMillis = 10000, easing = LinearEasing),
+            RepeatMode.Restart
+        )
+    )
+
+    // Adjust the scale factor here to set the zoom level
+    val zoomFactor = 3f // Example zoom factor
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(
+            painter = image,
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    rotationZ = rotation
+                    scaleX = zoomFactor
+                    scaleY = zoomFactor
+                }
+                .background(color = Color.LightGray)
+        )
+    }
+}
+
+@Suppress("DEPRECATION")
 @Composable
 fun BouncingBackground() {
-    val image: Painter = painterResource(id = R.drawable.backgroundbouncebw)
+    val context = LocalContext.current
+    val codeGroupOption by readCodeGroup(context).collectAsState(initial = "OpenMW")
+    val image: Painter = when (codeGroupOption) {
+        "OpenMW" -> rememberImagePainter(data = "file:${Constants.USER_UI}/backgroundbouncebw.jpg")
+        "UQM" -> rememberImagePainter(data = "file:${Constants.USER_UI}/starmap.jpg")
+        else -> painterResource(id = R.drawable.backgroundbouncebw)
+    }
+
     val configuration = LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp * configuration.densityDpi / 160
     val screenHeight = configuration.screenHeightDp * configuration.densityDpi / 160
@@ -269,5 +605,53 @@ fun BouncingBackground() {
                 .size(imageWidth.dp, imageHeight.dp) // Convert Int to Dp
                 .scale(6f) // Scale the image up by a factor of 6
                 .background(color = Color.LightGray))
+    }
+}
+
+@Suppress("DEPRECATION")
+@Composable
+fun CircularBackground() {
+    val context = LocalContext.current
+    val codeGroupOption by readCodeGroup(context).collectAsState(initial = "OpenMW")
+    val image: Painter = when (codeGroupOption) {
+        "OpenMW" -> rememberImagePainter(data = "file:${Constants.USER_UI}/backgroundbouncebw.jpg")
+        "UQM" -> rememberImagePainter(data = "file:${Constants.USER_UI}/starmap.jpg")
+        else -> painterResource(id = R.drawable.backgroundbouncebw)
+    }
+
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp * configuration.densityDpi / 160
+    val screenHeight = configuration.screenHeightDp * configuration.densityDpi / 160
+
+    val imageWidth = 2000 // Replace with your image width
+    val imageHeight = 2337 // Replace with your image height
+
+    var offset: Offset by remember { mutableStateOf(Offset.Zero) }
+    var angle by remember { mutableFloatStateOf(0f) }
+    val radius = 1000f // Adjust the radius of the circular motion
+    val speed = 0.0020f
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            offset = Offset(
+                x = screenWidth / 2f + radius * cos(angle),
+                y = screenHeight / 2f + radius * sin(angle)
+            )
+            angle += speed // Adjust the speed by changing this value
+
+            delay(16L) // Update every frame (approx 60fps)
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(
+            painter = image,
+            contentDescription = null,
+            modifier = Modifier
+                .offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }
+                .size(imageWidth.dp, imageHeight.dp) // Convert Int to Dp
+                .scale(6f) // Scale the image up by a factor of 6
+                .background(color = Color.LightGray)
+        )
     }
 }

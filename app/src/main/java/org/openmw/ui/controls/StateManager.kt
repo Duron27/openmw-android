@@ -4,6 +4,13 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import android.view.KeyEvent
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -28,41 +36,109 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import org.openmw.Constants
+import org.openmw.ui.controls.UIStateManager.buttonsGroup
+import org.openmw.ui.controls.UIStateManager.configureControls
+import org.openmw.ui.controls.UIStateManager.enableRightThumb
+import org.openmw.ui.controls.UIStateManager.highlightStep
+import org.openmw.ui.controls.UIStateManager.menuAlpha
+import org.openmw.ui.controls.UIStateManager.menuColor
+import org.openmw.utils.GameFilesPreferences
+import org.openmw.utils.GameFilesPreferences.ICON_GLOW_KEY
+import org.openmw.utils.addCustomLog
+import org.openmw.utils.dataStore
 import java.io.File
 
 data class ButtonState(
-    var id: Int,
-    var size: Float,
-    var offsetX: Float,
-    var offsetY: Float,
-    var isLocked: Boolean,
-    var keyCode: Int,
-    var color: String,
-    var alpha: Float
+    val id: Int,
+    val size: Float,
+    val offsetX: Float,
+    val offsetY: Float,
+    val isLocked: Boolean,
+    val keyCode: Int,
+    val color: String,
+    val alpha: Float,
+    val uri: Uri?,
+    val group: Int
+)
+
+val DeletedButtonState = ButtonState(
+    id = -1, // Placeholder ID
+    size = 0f,
+    offsetX = 0f,
+    offsetY = 0f,
+    isLocked = false,
+    keyCode = -1,
+    color = "",
+    alpha = 0f,
+    uri = null,
+    group = -1
 )
 
 object UIStateManager {
-    var isUIHidden by mutableStateOf(false)
-    var visible by mutableStateOf(true)
-    var isVibrationEnabled by mutableStateOf(true)
     var isScaleView by mutableStateOf(false)
-    var isCursorVisible by mutableStateOf(false)
+    var useNavmesh by mutableStateOf(false)
+    var buttonsGroup by mutableIntStateOf(1)
+    var globalColorChange by mutableStateOf(false)
+    var globalColor by mutableStateOf("#FFFFFF") // Default color
+    var globalAlpha by mutableFloatStateOf(1.0f) // Default alpha
+
+    // This is needed for now in Activities
+    var tempCodeGroup by mutableStateOf("OpenMW")
+
+    val memoryInfoFlow = MutableStateFlow("")
+    val cpuUsageFlow = MutableStateFlow(0)
+    var cpuUsageText by mutableStateOf("CPU Usage: 0%")
+    val logMessagesFlow = MutableStateFlow("")
+    var logMessagesText by mutableStateOf("")
+    var isAppLoggingEnabled by mutableStateOf(false)
+    val offsetXFlow = MutableStateFlow(0f)
+    val offsetYFlow = MutableStateFlow(0f)
+
+    // Added highlightStep
+    var highlightStep by mutableIntStateOf(1)
+
+    // Odd bug where dragging either thumbstick and a button at the same time removes one from the UI so lets
+    // just lock them for now.
+    var isThumbDragging by mutableStateOf(false)
+    // Is the Right thumb visable?
+    var enableRightThumb by mutableStateOf(false)
+    // isMouseShown() toggles this on and off at EngineActivity line 372.
+    var isCursorVisible by mutableIntStateOf(0)
+
+    // Colors
+    val customColor = Color(0xFF1f1e23)
+    val transparentBlack = Color(alpha = 0.6f, red = 0f, green = 0f, blue = 0f)
+    val transparent = Color(alpha = 0.0f, red = 0f, green = 0f, blue = 0f)
+    val darkGray = Color(alpha = 0.6f, red = 0f, green = 0f, blue = 0f)
+    val lightGray = Color(alpha = 0.4f, red = 0f, green = 0f, blue = 0f)
 
     // Add the shared states
     var memoryInfoText by mutableStateOf("")
@@ -72,99 +148,177 @@ object UIStateManager {
     var isLoggingEnabled by mutableStateOf(false)
     var isLogcatEnabled by mutableStateOf(false)
     var editMode by mutableStateOf(false)
-    var isThumbDragging by mutableStateOf(false)
-    var buttonStates = mutableMapOf<Int, MutableState<ButtonState>>()
-    var useNavmesh by mutableStateOf(false)
+    var firstLaunch by mutableStateOf(false)
     val gridSize = mutableIntStateOf(50)
     val gridVisible = mutableStateOf(false)
     val gridAlpha = mutableFloatStateOf(0.25f)
-    val createdButtons = mutableStateListOf<ButtonState>()
-    const val REQUEST_CODE_PICK_IMAGE = 1001
-    var selectedImageUri: Uri? by mutableStateOf(null)
     var configureControls by mutableStateOf(false)
+    var menuAlpha by mutableFloatStateOf(1f)
+    var menuColor by mutableStateOf(Color.Blue)
+    var launchedActivity by mutableStateOf(false)
+    private val _buttonStates = MutableStateFlow<Map<Int, ButtonState>>(emptyMap())
+    val buttonStates: StateFlow<Map<Int, ButtonState>> get() = _buttonStates
 
-    fun updateButtonState(id: Int, state: ButtonState) {
-        if (false) {
-            buttonStates.remove(id)
+    // WIP stuff
+    var VirtualKB by mutableStateOf(false)
+    var LeftJoy by mutableStateOf(false)
+
+    // Function to change all button colors and alpha
+    fun changeAllButtonColorsAndAlpha(newColor: String, newAlpha: Float) {
+        val updatedStates = _buttonStates.value.mapValues { (_, buttonState) ->
+            buttonState.copy(color = newColor, alpha = newAlpha)
+        }
+        _buttonStates.value = updatedStates
+        globalColor = newColor
+        globalAlpha = newAlpha
+    }
+
+    fun saveImageUri(id: Int, uri: Uri) {
+        _buttonStates.value = _buttonStates.value.toMutableMap().apply {
+            this[id]?.let { existingState ->
+                put(id, existingState.copy(uri = uri))
+            }
+        }
+    }
+
+    fun updateButtonState(buttonId: Int, buttonState: ButtonState) {
+        _buttonStates.value = _buttonStates.value.toMutableMap().apply {
+            this[buttonId] = buttonState
+        }
+    }
+
+    fun removeButtonState(buttonId: Int, context: Context, containerWidth: Float, containerHeight: Float) {
+        // Update the state by removing the button
+        _buttonStates.value = _buttonStates.value.toMutableMap().apply { this[buttonId] = DeletedButtonState }
+
+        //Log.d("RemoveButtonState", "Button with ID $buttonId removed from state.")
+
+        // Delete the associated image file
+        val imageFile = File(Constants.USER_UI, "$buttonId.png")
+        if (imageFile.exists()) {
+            if (imageFile.delete()) {
+                addCustomLog("Image file deleted: ${imageFile.absolutePath}", textSize = 10, textColor = Color.Cyan)
+            } else {
+                addCustomLog("Failed to delete image file: ${imageFile.absolutePath}", textSize = 10, textColor = Color.Red)
+            }
         } else {
-            // Update the state in the map
-            buttonStates[id]?.value = state
-        }
-        // Log the state update for debugging
-        Log.d("UpdateButtonState", "Updated state for button ID: $id, State: $state")
-    }
-
-    fun logAllButtonStates() {
-        buttonStates.forEach { (id, state) ->
-            Log.d("ButtonState", "Button ID: $id, State: ${state.value}")
-        }
-    }
-}
-
-fun saveButtonState(context: Context, state: List<ButtonState>) {
-    val file = File("${Constants.USER_CONFIG}/UI.cfg")
-    if (!file.exists()) {
-        file.createNewFile()
-    }
-
-    val thumbsticks = state.filter { it.id in listOf(99, 98) }
-    val existingStates = state.filter { it.id !in listOf(99, 98) }.toMutableList()
-    // Add all elements of thumbsticks to existingStates
-    existingStates.addAll(thumbsticks)
-
-    file.printWriter().use { out ->
-        existingStates.forEach { button ->
-            out.println("ButtonID_${button.id}(${button.size};${button.offsetX};${button.offsetY};${button.isLocked};${button.keyCode};Color.${button.color};${button.alpha})")
-        }
-    }
-}
-
-fun loadButtonState(context: Context): List<ButtonState> {
-    val file = File("${Constants.USER_CONFIG}/UI.cfg")
-    if (!file.exists()) {
-        println("File does not exist: ${file.absolutePath}")
-        return emptyList()
-    }
-
-    val lines = file.readLines()
-    println("File content: $lines")
-    if (lines.isEmpty()) {
-        println("File is empty")
-        return emptyList()
-    }
-
-    return lines.mapNotNull { line ->
-        val regex = """ButtonID_(\d+)\(([\d.]+);([\d.]+);([\d.]+);(true|false);(\d+);Color\.(\w+);([\d.]+)\)""".toRegex()
-        val matchResult = regex.find(line)
-        println("Processing line: $line")
-        if (matchResult == null) {
-            println("No match for line: $line")
-            return@mapNotNull null
+            addCustomLog("Image file does not exist: ${imageFile.absolutePath}", textSize = 10, textColor = Color.Cyan)
         }
 
-        matchResult.let {
+        // Save the updated state
+        saveButtonState(containerWidth, containerHeight)
+        //Log.d("RemoveButtonState", "Button state saved.")
+        addCustomLog("Button with ID $buttonId removed from state.", textSize = 10, textColor = Color.Cyan)
+    }
+
+    fun addButtonState(buttonState: ButtonState) {
+        _buttonStates.value += (buttonState.id to buttonState)
+    }
+
+    fun saveButtonState(containerWidth: Float, containerHeight: Float) {
+        CoroutineScope(Dispatchers.IO).launch {
+            val file = File("${Constants.USER_UI}/UI.cfg")
+            if (!file.exists()) {
+                file.createNewFile()
+            }
+
+            val buttonStateMap = _buttonStates.value
+            file.printWriter().use { out ->
+                buttonStateMap.values
+                    .filter { it.id != -1 } // Exclude DeletedButtonState
+                    .forEach { button ->
+                        // Calculate relative offsets
+                        val relativeOffsetX = button.offsetX / containerWidth
+                        val relativeOffsetY = button.offsetY / containerHeight
+
+                        // Ensure relative offsets are within the bounds of 0 to 1
+                        val validRelativeOffsetX = relativeOffsetX.coerceIn(0f, 1f)
+                        val validRelativeOffsetY = relativeOffsetY.coerceIn(0f, 1f)
+
+                        val uriString = button.uri?.let { uri ->
+                            // Properly format the URI string
+                            val uriPath = uri.path
+                            val extension = uriPath?.substringAfterLast(".")
+                            "${Constants.USER_UI}/${button.id}.$extension"
+                        } ?: "null"
+                        out.println("ButtonID_${button.id}(${button.size};${validRelativeOffsetX};${validRelativeOffsetY};${button.isLocked};${button.keyCode};#${button.color};${button.alpha};${uriString};${button.group})")
+                        addCustomLog("ButtonID_${button.id}(${button.size};${validRelativeOffsetX};${validRelativeOffsetY};${button.isLocked};${button.keyCode};#${button.color};${button.alpha};${uriString};${button.group})", textSize = 10, textColor = Color.Cyan)
+                    }
+            }
+        }
+    }
+
+    fun loadButtonState(context: Context, containerWidth: Float, containerHeight: Float) {
+        val file = File("${Constants.USER_UI}/UI.cfg")
+        if (!file.exists()) {
+            println("File does not exist: ${file.absolutePath}")
+            return
+        }
+
+        val lines = file.readLines()
+        println("File content: $lines")
+        if (lines.isEmpty()) {
+            println("File is empty")
+            return
+        }
+
+        val buttonStateMap = mutableMapOf<Int, ButtonState>()
+        var foundButton98 = false
+        var foundButton99 = false
+
+        lines.forEach { line ->
+            val regex = """ButtonID_(\d+)\(([\d.]+);([\d.]+);([\d.]+);(true|false);(\d+);#([A-Fa-f0-9]+);([\d.]+);(.+);(\d+)\)""".toRegex()
+            val matchResult = regex.find(line)
+            println("Processing line: $line")
+            if (matchResult == null) {
+                println("No match for line: $line")
+                return@forEach
+            }
+
+            val buttonId = matchResult.groupValues[1].toInt()
+            val uriString = matchResult.groupValues[9]
+            val uri = if (uriString == "null") null else Uri.parse("file://${Constants.USER_UI}/${buttonId}.${uriString.substringAfterLast(".")}")
+            val group = matchResult.groupValues.getOrNull(10)?.toInt() ?: 1 // Default group to 1 if not specified
+
+            if (buttonId == 98) {
+                foundButton98 = true
+            }
+            if (buttonId == 99) {
+                foundButton99 = true
+            }
+
+            // Calculate absolute offsets based on the container dimensions
+            val absoluteOffsetX = matchResult.groupValues[3].toFloat() * containerWidth
+            val absoluteOffsetY = matchResult.groupValues[4].toFloat() * containerHeight
+
             val buttonState = ButtonState(
-                id = it.groupValues[1].toInt(),
-                size = it.groupValues[2].toFloat(),
-                offsetX = it.groupValues[3].toFloat(),
-                offsetY = it.groupValues[4].toFloat(),
-                isLocked = it.groupValues[5].toBoolean(),
-                keyCode = it.groupValues[6].toInt(),
-                color = it.groupValues[7],  // Parse color as string
-                alpha = it.groupValues[8].toFloat()  // Parse alpha
+                id = buttonId,
+                size = matchResult.groupValues[2].toFloat(),
+                offsetX = absoluteOffsetX,
+                offsetY = absoluteOffsetY,
+                isLocked = matchResult.groupValues[5].toBoolean(),
+                keyCode = matchResult.groupValues[6].toInt(),
+                color = matchResult.groupValues[7],
+                alpha = matchResult.groupValues[8].toFloat(),
+                uri = uri,
+                group = group // Load group information
             )
 
-            println("Loaded button state: $buttonState")
+            if (uri != null) {
+                println("Loaded image URI for button ID $buttonId: ${uri.path}")
+            }
 
-            // Update UIStateManager with the loaded button state
-            UIStateManager.buttonStates[buttonState.id] = mutableStateOf(buttonState)
-            buttonState
+            println("Loaded button state: $buttonState")
+            // Update the map with the loaded button state
+            buttonStateMap[buttonId] = buttonState
         }
+        _buttonStates.value = buttonStateMap
+        enableRightThumb = foundButton98
     }
 }
 
 @Composable
-fun KeySelectionMenu(onKeySelected: (Int) -> Unit, usedKeys: List<Int>, editMode: Boolean) {
+fun KeySelectionMenu(context: Context, onKeySelected: (Int) -> Unit, usedKeys: List<Int>, containerWidth: Float, containerHeight: Float) {
     // Add A, S, D, and W to usedKeys
     val reservedKeys = listOf(
         KeyEvent.KEYCODE_A,
@@ -178,9 +332,21 @@ fun KeySelectionMenu(onKeySelected: (Int) -> Unit, usedKeys: List<Int>, editMode
         val keyCode = KeyEvent.KEYCODE_A + key.minus('A')
         keyCode !in allUsedKeys
     }
-    val fKeys = (KeyEvent.KEYCODE_F1..KeyEvent.KEYCODE_F12).filter { keyCode ->
+
+    val numericKeys = ('0'..'9').toList().filter { key ->
+        val keyCode = KeyEvent.KEYCODE_0 + key.minus('0')
         keyCode !in allUsedKeys
     }
+
+    val fKeys = listOf(
+        KeyEvent.KEYCODE_F1, KeyEvent.KEYCODE_F2, KeyEvent.KEYCODE_F3,
+        KeyEvent.KEYCODE_F4, KeyEvent.KEYCODE_F5, KeyEvent.KEYCODE_F6,
+        KeyEvent.KEYCODE_F7, KeyEvent.KEYCODE_F8, KeyEvent.KEYCODE_F9,
+        KeyEvent.KEYCODE_F10, KeyEvent.KEYCODE_F11, KeyEvent.KEYCODE_F12
+    ).filter { keyCode ->
+        keyCode !in allUsedKeys
+    }
+
     val additionalKeys = listOf(
         KeyEvent.KEYCODE_SHIFT_LEFT,
         KeyEvent.KEYCODE_SHIFT_RIGHT,
@@ -191,13 +357,13 @@ fun KeySelectionMenu(onKeySelected: (Int) -> Unit, usedKeys: List<Int>, editMode
         KeyEvent.KEYCODE_SPACE,
         KeyEvent.KEYCODE_ESCAPE,
         KeyEvent.KEYCODE_ENTER,
-        KeyEvent.KEYCODE_GRAVE
+        KeyEvent.KEYCODE_GRAVE,
+        KeyEvent.KEYCODE_TAB
     ).filter { keyCode -> keyCode !in allUsedKeys }
 
     var showDialog by remember { mutableStateOf(false) }
     IconButton(onClick = {
         showDialog = true
-        UIStateManager.editMode = true
     }) {
         Icon(
             Icons.Default.Add,
@@ -220,13 +386,48 @@ fun KeySelectionMenu(onKeySelected: (Int) -> Unit, usedKeys: List<Int>, editMode
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text(
+                        text = "Select a Numeric Key",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 16.dp, top = 16.dp)
+                    )
+                    numericKeys.chunked(5).forEach { rowKeys ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowKeys.forEach { key ->
+                                val keyCode = KeyEvent.KEYCODE_0 + key.minus('0')
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .background(Color.LightGray, shape = CircleShape)
+                                        .clickable {
+                                            onKeySelected(keyCode)
+                                            showDialog = false
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = key.toString(),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = Color.Black
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    HorizontalDivider(color = Color.White, thickness = 1.dp, modifier = Modifier.padding(vertical = 16.dp))
+                    Text(
                         text = "Select a Key",
                         style = MaterialTheme.typography.titleMedium,
                         color = Color.White,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    letterKeys.chunked(6).forEach { rowKeys ->
+                    letterKeys.chunked(5).forEach { rowKeys ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(4.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -259,18 +460,22 @@ fun KeySelectionMenu(onKeySelected: (Int) -> Unit, usedKeys: List<Int>, editMode
                         color = Color.White,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
-                    fKeys.chunked(6).forEach { rowKeys ->
+                    fKeys.chunked(5).forEach { rowKeys ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(4.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             rowKeys.forEach { keyCode ->
                                 val key = "F${keyCode - KeyEvent.KEYCODE_F1 + 1}"
+                                Log.d("DisplayKey", "Processing key: $key with keyCode: $keyCode") // Log each key
+                                addCustomLog("Processing key: $key with keyCode: $keyCode", textSize = 10, textColor = Color.Green)
                                 Box(
                                     modifier = Modifier
                                         .size(48.dp)
                                         .background(Color.LightGray, shape = CircleShape)
                                         .clickable {
+                                            Log.d("FKeyClick", "Clicked on key: $key with keyCode: $keyCode")
+                                            addCustomLog("FKeyClick\", \"Clicked on key: $key with keyCode: $keyCode", textSize = 10, textColor = Color.Green)
                                             onKeySelected(keyCode)
                                             showDialog = false
                                         },
@@ -292,7 +497,7 @@ fun KeySelectionMenu(onKeySelected: (Int) -> Unit, usedKeys: List<Int>, editMode
                         color = Color.White,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
-                    additionalKeys.chunked(4).forEach { rowKeys ->
+                    additionalKeys.chunked(5).forEach { rowKeys ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(4.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -309,6 +514,7 @@ fun KeySelectionMenu(onKeySelected: (Int) -> Unit, usedKeys: List<Int>, editMode
                                     KeyEvent.KEYCODE_ESCAPE -> "Escape"
                                     KeyEvent.KEYCODE_ENTER -> "Enter"
                                     KeyEvent.KEYCODE_GRAVE -> "`"
+                                    KeyEvent.KEYCODE_TAB -> "Tab"
                                     else -> keyCode.toString()
                                 }
                                 Box(
@@ -330,11 +536,53 @@ fun KeySelectionMenu(onKeySelected: (Int) -> Unit, usedKeys: List<Int>, editMode
                             }
                         }
                     }
+                    HorizontalDivider(color = Color.White, thickness = 1.dp, modifier = Modifier.padding(vertical = 16.dp))
+                    Text(
+                        text = "Enable Right Thumbstick.",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    Switch(
+                        checked = enableRightThumb,
+                        onCheckedChange = { isChecked ->
+                            enableRightThumb = isChecked
+                            if (isChecked) {
+                                // Logic to add ButtonID_98
+                                val newButtonState = ButtonState(
+                                    id = 98,
+                                    size = 160f,
+                                    offsetX = 200f,
+                                    offsetY = 200f,
+                                    isLocked = false,
+                                    keyCode = 98,
+                                    color = "aafdfffe",
+                                    alpha = 0.25f,
+                                    uri = null,
+                                    group = 1
+                                )
+
+                                // Update UIStateManager with the new button state
+                                UIStateManager.updateButtonState(newButtonState.id, newButtonState)
+                            } else {
+                                // Logic to remove ButtonID_98
+                                UIStateManager.removeButtonState(98, context, containerWidth, containerHeight)
+                            }
+
+                            // Save the updated button states to the file
+                            UIStateManager.saveButtonState(containerWidth, containerHeight)
+
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Green,
+                            uncheckedThumbColor = Color.Gray
+                        )
+                    )
+
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = {
                             showDialog = false
-                            UIStateManager.editMode = true
                         },
                         modifier = Modifier.align(Alignment.End)
                     ) {
@@ -350,77 +598,116 @@ fun KeySelectionMenu(onKeySelected: (Int) -> Unit, usedKeys: List<Int>, editMode
 fun DynamicButtonManager(
     context: Context,
     onNewButtonAdded: (ButtonState) -> Unit,
-    editMode: Boolean,
-    createdButtons: List<ButtonState>
+    containerWidth: Float,
+    containerHeight: Float,
+    blurRadius: Dp = 6.dp,
+    shadowColor: Color = Color.White.copy(alpha = 0.6f),
+    scaleFactor:Float = 1.2f,
 ) {
-    var showDialog by remember { mutableStateOf(false) }
-    Column(
-        modifier = Modifier.padding(start = 40.dp) // Add padding to space from the left
-    ) {
+    val buttonStates by UIStateManager.buttonStates.collectAsState()
+    val matchIconColorChecked by GameFilesPreferences.loadMatchIconColorState(context).collectAsState(initial = false)
+    val tutorial by GameFilesPreferences.getTutorial(context).collectAsState(initial = false)
+    val offsetX by animateDpAsState(
+        targetValue = if (UIStateManager.editMode) 2.dp else 0.dp,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 100, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        finishedListener = {
+            if (!UIStateManager.editMode) 0.dp else it
+        }, label = ""
+    )
+
+    val infiniteTransition = rememberInfiniteTransition()
+
+    // Animate alpha for flashing effect
+    val alpha = infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 500, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
+    val iconTint = if (configureControls && tutorial && highlightStep == 2) {
+        Color.Yellow
+    } else if (matchIconColorChecked) {
+        menuColor.copy(alpha = menuAlpha)
+    } else {
+        Color.Black
+    }
+
+    val iconGlow by produceState(initialValue = false) {
+        val preferences = context.dataStore.data.first()
+        value = preferences[ICON_GLOW_KEY] ?: false
+    }
+    Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
-                showDialog = !showDialog
-                UIStateManager.editMode = showDialog
+                UIStateManager.editMode = !UIStateManager.editMode
+                highlightStep++
             }) {
-                Icon(Icons.Default.Build, contentDescription = "Button Menu")
+                if (iconGlow) {
+                    Icon(
+                        imageVector = Icons.Default.Build,
+                        contentDescription = "Button Menu",
+                        modifier = Modifier
+                            .size(30.dp)
+                            .scale(scaleFactor)
+                            .blur(blurRadius),
+                        tint = shadowColor,
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.Build,
+                    contentDescription = "Button Menu",
+                    modifier = Modifier
+                        .offset(x = if (UIStateManager.editMode) offsetX else 0.dp)
+                        .alpha(if (configureControls && tutorial && highlightStep == 2) alpha.value else 1f),
+                    tint = iconTint
+                )
             }
         }
-        if (showDialog) {
+        if (UIStateManager.editMode) {
             KeySelectionMenu(
                 onKeySelected = { keyCode ->
-                    val allButtons = loadButtonState(context)
-                    val thumbsticks = allButtons.filter { it.id in listOf(99, 98) }
-                    val otherButtons = allButtons.filter { it.id !in listOf(99, 98) }
-                    val maxExistingId = otherButtons.maxOfOrNull { it.id } ?: 0
-                    val newId = maxExistingId + 1
+                    // Generate a new ID for the button
+                    val existingIds = UIStateManager.buttonStates.value.keys.filter { it !in listOf(98, 99) }
+                    val newId = if (configureControls && tutorial) {
+                        999
+                    } else {
+                        (1..Int.MAX_VALUE).first { it !in existingIds }
+                    }
+
+                    // Create a new ButtonState
                     val newButtonState = ButtonState(
                         id = newId,
                         size = 60f,
-                        offsetX = 100f,
-                        offsetY = 100f,
+                        offsetX = 200f,
+                        offsetY = 200f,
                         isLocked = false,
                         keyCode = keyCode,
-                        color = "Black",
-                        alpha = 0.25f
+                        color = "000000FF",
+                        alpha = 0.25f,
+                        uri = null,
+                        group = buttonsGroup
                     )
-                    val updatedButtons = otherButtons + newButtonState
-                    val finalUpdatedButtons = updatedButtons + thumbsticks
-                    saveButtonState(context, finalUpdatedButtons)
+
                     onNewButtonAdded(newButtonState)
-                    showDialog = false
-                    UIStateManager.editMode = true
+
+                    highlightStep++
+
+                    // Update the UIStateManager with the new button state
+                    UIStateManager.updateButtonState(newButtonState.id, newButtonState)
+                    UIStateManager.saveButtonState(containerWidth, containerHeight)
+
                 },
-                usedKeys = createdButtons.map { it.keyCode },
-                editMode = UIStateManager.editMode
+                usedKeys = buttonStates.values.map { it.keyCode },
+                context = context,
+                containerWidth = containerWidth,
+                containerHeight = containerHeight
             )
         }
     }
-}
-
-// Helper function to convert string to Color
-fun String.toColor(): Color = when (this) {
-    "Black" -> Color.Black
-    "Gray" -> Color.Gray
-    "White" -> Color.White
-    "Red" -> Color.Red
-    "Green" -> Color.Green
-    "Blue" -> Color.Blue
-    "Yellow" -> Color.Yellow
-    "Magenta" -> Color.Magenta
-    "Cyan" -> Color.Cyan
-    else -> Color.Gray
-}
-
-// Convert Color object to string representation
-fun Color.toColorString(): String = when (this) {
-    Color.Black -> "Black"
-    Color.Gray -> "Gray"
-    Color.White -> "White"
-    Color.Red -> "Red"
-    Color.Green -> "Green"
-    Color.Blue -> "Blue"
-    Color.Yellow -> "Yellow"
-    Color.Magenta -> "Magenta"
-    Color.Cyan -> "Cyan"
-    else -> "Gray"
 }

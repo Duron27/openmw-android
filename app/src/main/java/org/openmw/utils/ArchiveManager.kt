@@ -31,6 +31,20 @@ import java.io.FileInputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 
+fun containsMorrowindFolder(zipFilePath: String): Boolean {
+    ZipInputStream(FileInputStream(zipFilePath)).use { zipIn ->
+        var entry: ZipEntry? = zipIn.nextEntry
+        while (entry != null) {
+            if (entry.name.startsWith("Morrowind/")) {
+                return true
+            }
+            zipIn.closeEntry()
+            entry = zipIn.nextEntry
+        }
+    }
+    return false
+}
+
 @Composable
 fun UnzipWithProgress(onComplete: () -> Unit) {
     val progressFlow = remember { MutableStateFlow(0f) }

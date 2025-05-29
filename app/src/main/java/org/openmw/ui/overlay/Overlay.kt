@@ -3,72 +3,145 @@ package org.openmw.ui.overlay
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
-import android.view.View
-import android.widget.FrameLayout
+import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Face
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.sharp.Send
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
-import androidx.test.internal.runner.junit4.statement.UiThreadStatement.runOnUiThread
-import kotlinx.coroutines.*
-import org.openmw.ui.controls.ButtonState
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.openmw.R
+import org.openmw.ToggleFeatureSwitch
 import org.openmw.ui.controls.DynamicButtonManager
-import org.openmw.ui.controls.MouseCursor
-import org.openmw.ui.controls.ScaleView
 import org.openmw.ui.controls.UIStateManager
 import org.openmw.ui.controls.UIStateManager.configureControls
+import org.openmw.ui.controls.UIStateManager.cpuUsageFlow
+import org.openmw.ui.controls.UIStateManager.customColor
+import org.openmw.ui.controls.UIStateManager.editMode
 import org.openmw.ui.controls.UIStateManager.gridAlpha
 import org.openmw.ui.controls.UIStateManager.gridSize
 import org.openmw.ui.controls.UIStateManager.gridVisible
+import org.openmw.ui.controls.UIStateManager.highlightStep
 import org.openmw.ui.controls.UIStateManager.isCursorVisible
-import org.openmw.ui.controls.UIStateManager.isScaleView
-import org.openmw.utils.*
+import org.openmw.ui.controls.UIStateManager.launchedActivity
+import org.openmw.ui.controls.UIStateManager.logMessagesFlow
+import org.openmw.ui.controls.UIStateManager.memoryInfoFlow
+import org.openmw.ui.controls.UIStateManager.menuAlpha
+import org.openmw.ui.controls.UIStateManager.menuColor
+import org.openmw.ui.theme.White
+import org.openmw.utils.GameFilesPreferences
+import org.openmw.utils.GameFilesPreferences.getOffsetXMouse
+import org.openmw.utils.GameFilesPreferences.getOffsetYMouse
+import org.openmw.utils.GameFilesPreferences.getSensitivityMouse
+import org.openmw.utils.GameFilesPreferences.loadAutoMouseMode
+import org.openmw.utils.GameFilesPreferences.setOffsetXMouse
+import org.openmw.utils.GameFilesPreferences.setOffsetYMouse
+import org.openmw.utils.GameFilesPreferences.setSensitivityMouse
+import org.openmw.utils.GameFilesPreferences.setTutorial
+import org.openmw.utils.GameFilesPreferences.setWhatsNew
+import org.openmw.utils.LogRepository
+import org.openmw.utils.LogsBox
+import org.openmw.utils.TravelMenuPopup
+import org.openmw.utils.getBatteryStatus
+import org.openmw.utils.hasInternetPermission
+import org.openmw.utils.sendKeyEvent
+import org.openmw.utils.startLoggingUpdates
+import org.openmw.utils.startResourceInfoUpdates
+import org.openmw.utils.updateConsoleOutput
 import kotlin.math.roundToInt
 
 data class MemoryInfo(
@@ -77,58 +150,201 @@ data class MemoryInfo(
     val usedMemory: String
 )
 
-@SuppressLint("RestrictedApi")
-fun toggleScaleView(scaleView: ScaleView) {
-    runOnUiThread {
-        isScaleView = !isScaleView
-        scaleView.visibility = if (isScaleView) View.VISIBLE else View.GONE
-    }
-}
-
+@DelicateCoroutinesApi
 @Composable
 fun OverlayUI(
     context: Context,
-    editMode: Boolean,
-    createdButtons: SnapshotStateList<ButtonState>,
-    scaleView: ScaleView,
-    mouseCursor: MouseCursor?
+    onKeyEvent: (Int) -> Unit,
+    blurRadius: Dp = 6.dp,
+    shadowColor: Color = Color.White.copy(alpha = 0.6f),
+    scaleFactor:Float = 1.2f,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val visible = UIStateManager.visible
-    val density = LocalDensity.current
-    var isScaleView by remember { mutableStateOf(false) }
-    val scrollState = rememberScrollState()
-    val logMessages = remember { mutableStateOf("") }
+    var expanded2 by remember { mutableStateOf(false) }
+    var containerWidth by remember { mutableFloatStateOf(0f) }
+    var containerHeight by remember { mutableFloatStateOf(0f) }
+    val iconGlowChecked by GameFilesPreferences.loadIconGlow(context).collectAsState(initial = true)
+    val matchIconColorChecked by GameFilesPreferences.loadMatchIconColorState(context).collectAsState(initial = false)
+    val newFeatureEnabledChecked by GameFilesPreferences.loadNewFeatureEnabledState(context).collectAsState(initial = false)
+    var showWebView by remember { mutableStateOf(false) }
+    var showMouseMenu by remember { mutableStateOf(false) }
+    var consoleOutput by remember { mutableStateOf("") }
+    val autoMouseMode by loadAutoMouseMode(context).collectAsState(initial = "Hybrid")
+    val sensitivityMouseFlow = getSensitivityMouse(context).collectAsState(initial = 900f)
+    var sensitivityMouse by remember { mutableFloatStateOf(sensitivityMouseFlow.value ?: 900f) }
+    val tutorial by GameFilesPreferences.getTutorial(context).collectAsState(initial = false)
+    val offsetXMouseFlow = getOffsetXMouse(context).collectAsState(initial = 0f)
+    var offsetXMouse by remember { mutableFloatStateOf(offsetXMouseFlow.value ?: 0f) }
+    val offsetYMouseFlow = getOffsetYMouse(context).collectAsState(initial = 0f)
+    var offsetYMouse by remember { mutableFloatStateOf(offsetYMouseFlow.value ?: 0f) }
+    val rotationAngle by animateFloatAsState(
+        targetValue = if (expanded2) 360f else -360f, animationSpec = tween(1000),
+        label = ""
+    )
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            if (UIStateManager.isMemoryInfoEnabled) {
-                val memoryInfo = getMemoryInfo(context)
-                UIStateManager.memoryInfoText = "Total memory: ${memoryInfo.totalMemory}\n" +
-                        "Available memory: ${memoryInfo.availableMemory}\n" +
-                        "Used memory: ${memoryInfo.usedMemory}"
-            } else {
-                UIStateManager.memoryInfoText = ""
+    val infiniteTransition = rememberInfiniteTransition()
+
+    // Animate alpha for flashing effect
+    val alpha = infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 500, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
+    // Define the update functions and assign them to the lambdas
+    updateConsoleOutput = { newOutput ->
+        consoleOutput += newOutput
+    }
+    sendKeyEvent = onKeyEvent
+
+    LaunchedEffect(offsetYMouseFlow.value) {
+        offsetYMouse = offsetYMouseFlow.value ?: 0f
+    }
+    LaunchedEffect(offsetXMouseFlow.value) {
+        offsetXMouse = offsetXMouseFlow.value ?: 0f
+    }
+    LaunchedEffect(sensitivityMouseFlow.value) {
+        sensitivityMouse = sensitivityMouseFlow.value ?: 900f
+    }
+
+    // Collect in your UI layer
+    LaunchedEffect(UIStateManager.isMemoryInfoEnabled) {
+        if (UIStateManager.isMemoryInfoEnabled) {
+            startResourceInfoUpdates(context)
+        }
+        launch {
+            memoryInfoFlow.collect { memoryInfoText ->
+                UIStateManager.memoryInfoText = memoryInfoText
             }
-            if (UIStateManager.isBatteryStatusEnabled) {
-                UIStateManager.batteryStatus = getBatteryStatus(context)
-            } else {
-                UIStateManager.batteryStatus = ""
+        }
+        launch {
+            cpuUsageFlow.collect { cpuUsage ->
+                UIStateManager.cpuUsageText = "CPU Usage: $cpuUsage%"
             }
-            if (UIStateManager.isLoggingEnabled) {
-                logMessages.value = getMessages().joinToString("\n")
-                scrollState.scrollTo(scrollState.maxValue)
-            } else {
-                logMessages.value = ""
-            }
-            delay(1000)
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // Battery Status LaunchedEffect
+    LaunchedEffect(UIStateManager.isBatteryStatusEnabled) {
+        while (UIStateManager.isBatteryStatusEnabled) {
+            UIStateManager.batteryStatus = getBatteryStatus(context)
+            delay(2000)
+        }
+        UIStateManager.batteryStatus = ""
+    }
+
+    // Collect in your UI layer
+    LaunchedEffect(UIStateManager.isLoggingEnabled) {
+        if (UIStateManager.isLoggingEnabled) {
+            startLoggingUpdates()
+        }
+        launch {
+            logMessagesFlow.collect { logMessages ->
+                UIStateManager.logMessagesText = logMessages
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
+        if (configureControls && tutorial) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0f, 0f, 0f, 0.6f)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (highlightStep == 1) {
+                    Text(
+                        text = "This tutorial will show you how to add, delete and\nmodify all buttons and thumbsticks.\n\nStart by using the expand arrow.",
+                        style = TextStyle(
+                            color = White,
+                            fontSize = 20.sp
+                        )
+                    )
+                }
+                if (highlightStep == 2) {
+                    Text(
+                        text = "Click this icon to enter and exit editMode.",
+                        style = TextStyle(
+                            color = White,
+                            fontSize = 20.sp
+                        )
+                    )
+                }
+                if (highlightStep == 3) {
+                    Text(
+                        text = "This is editMode, Click the RED + to add buttons or\nenable the right thumbstick if it's not already on.",
+                        style = TextStyle(
+                            color = White,
+                            fontSize = 20.sp
+                        )
+                    )
+                }
+                if (highlightStep == 4) {
+                    Text(
+                        text = "Now that a button is added, you can drag it by\nholding down and swiping it.",
+                        style = TextStyle(
+                            color = White,
+                            fontSize = 20.sp
+                        )
+                    )
+                }
+                if (highlightStep == 5) {
+                    Text(
+                        text = "Now you try.",
+                        style = TextStyle(
+                            color = White,
+                            fontSize = 20.sp
+                        )
+                    )
+                }
+                if (highlightStep == 6) {
+                    Text(
+                        text = "Perfect!. Now click the spinning Yellow dots\nto edit the button.",
+                        style = TextStyle(
+                            color = White,
+                            fontSize = 20.sp
+                        )
+                    )
+                }
+                if (highlightStep == 7) {
+                    var countdown by remember { mutableIntStateOf(5) }
+                    editMode = false
+
+                    LaunchedEffect(Unit) {
+                        while (countdown > 0) {
+                            delay(1000L)
+                            countdown -= 1
+                        }
+                        setWhatsNew(context, false)
+                        setTutorial(context, false)
+                        // After countdown reaches 0, execute these actions
+                        highlightStep = 0
+                        launchedActivity = false
+                        (context as? Activity)?.finish()
+                    }
+
+                    if (countdown > 0) {
+                        Text(
+                            text = "That's it for now, you have the basic UI tutorial finished. Closing in $countdown...",
+                            style = TextStyle(
+                                color = Color.White,
+                                fontSize = 20.sp
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+
         Surface(
             color = Color.Transparent,
-            onClick = { expanded = !expanded }
         ) {
             AnimatedContent(
                 targetState = expanded,
@@ -161,134 +377,447 @@ fun OverlayUI(
                             .padding(5.dp)
                     ) {
                         PopUpWindow(
-                            expanded = expanded,
                             context = context,
-                            onClose = { expanded = false },
-                            onToggleUI = {
-                                UIStateManager.isUIHidden = !UIStateManager.isUIHidden
-                                UIStateManager.visible = !UIStateManager.isUIHidden
-                            },
-                            onToggleVibration = { UIStateManager.isVibrationEnabled = !UIStateManager.isVibrationEnabled },
-                            onToggleMemoryInfo = { UIStateManager.isMemoryInfoEnabled = !UIStateManager.isMemoryInfoEnabled },
-                            onToggleBatteryStatus = { UIStateManager.isBatteryStatusEnabled = !UIStateManager.isBatteryStatusEnabled },
-                            onToggleLogcat = { UIStateManager.isLoggingEnabled = !UIStateManager.isLoggingEnabled }
+                            onClose = { expanded = false }
                         )
                     }
-                } else {
-                    Row(
-                        modifier = Modifier.align(Alignment.TopEnd)
+                }
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 15.dp, start = 15.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 10.dp, start = 10.dp)
                     ) {
+                        if (iconGlowChecked) {
+                            Icon(
+                                imageVector = Icons.Rounded.Settings,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .scale(scaleFactor)
+                                    .blur(blurRadius),
+                                tint = shadowColor,
+                            )
+                        }
                         Icon(
-                            Icons.Rounded.Settings,
+                            imageVector = Icons.Rounded.Settings,
                             contentDescription = "Settings",
                             modifier = Modifier
-                                .padding(top = 10.dp, start = 20.dp)
-                                .size(30.dp),
-                            tint = Color.Black
+                                .size(30.dp)
+                                .rotate(rotationAngle)
+                                .clickable { expanded = !expanded },
+                            tint = if (matchIconColorChecked) {
+                                menuColor.copy(alpha = menuAlpha)
+                            } else {
+                                Color.Black
+                            }
                         )
-                        AnimatedVisibility(
-                            visible = visible,
-                            enter = slideInVertically(
-                                initialOffsetY = { with(density) { -20.dp.roundToPx() } },
-                                animationSpec = tween(durationMillis = 1000)
-                            ) + expandVertically(
-                                expandFrom = Alignment.Bottom,
-                                animationSpec = tween(durationMillis = 1000)
-                            ) + fadeIn(
-                                initialAlpha = 0.3f,
-                                animationSpec = tween(durationMillis = 1000)
-                            ),
-                            exit = slideOutVertically(
-                                targetOffsetY = { with(density) { -20.dp.roundToPx() } },
-                                animationSpec = tween(durationMillis = 1000)
-                            ) + shrinkVertically(
-                                animationSpec = tween(durationMillis = 1000)
-                            ) + fadeOut(
-                                animationSpec = tween(durationMillis = 1000)
-                            )
+                    }
+                    AnimatedVisibility(
+                        visible = expanded2,
+                        enter = expandHorizontally(animationSpec = tween(300)),
+                        exit = shrinkHorizontally(animationSpec = tween(300))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.Top
                         ) {
                             DynamicButtonManager(
                                 context = context,
                                 onNewButtonAdded = { newButtonState ->
-                                    createdButtons.add(newButtonState)
+                                    UIStateManager.addButtonState(newButtonState)
                                 },
-                                editMode = UIStateManager.editMode,
-                                createdButtons = createdButtons
+                                containerWidth = containerWidth,
+                                containerHeight = containerHeight
+
                             )
-                            // IconButton to toggle zoom and move buttons
-                            IconButton(
-                                onClick = {
-                                    isScaleView = !isScaleView
-                                    scaleView.scaleSdlView(isScaleView)
-                                    UIStateManager.isUIHidden = isScaleView
-                                    UIStateManager.visible = !UIStateManager.isUIHidden
-                                    toggleScaleView(scaleView)
-                                    if (isScaleView) {
-                                        // Add exit button to the view
-                                        scaleView.addExitButton()
-                                        //customCursorView.addCursorToggleButton()
-                                    } else {
-                                        // Remove exit button from the view
-                                        scaleView.removeExitButton()
-                                        //customCursorView.removeCursorToggleButton()
+                            if (!editMode && !configureControls) {
+                                if (newFeatureEnabledChecked) {
+                                    if (hasInternetPermission(context)) {
+                                        IconButton(
+                                            onClick = { showWebView = true }
+                                        ) {
+                                            val painter = rememberAsyncImagePainter(
+                                                model = ImageRequest.Builder(LocalContext.current)
+                                                    .data(R.drawable.map_24dp_e8eaed_fill0_wght400_grad0_opsz24)
+                                                    .build()
+                                            )
+                                            if (iconGlowChecked) {
+                                                Image(
+                                                    painter = painter,
+                                                    contentDescription = "World Map",
+                                                    modifier = Modifier
+                                                        .size(30.dp)
+                                                        .scale(scaleFactor)
+                                                        .blur(blurRadius),
+                                                    colorFilter = ColorFilter.tint(shadowColor)
+                                                )
+                                            }
+                                            Image(
+                                                painter = painter,
+                                                contentDescription = "World Map",
+                                                modifier = Modifier.size(24.dp),
+                                                colorFilter = if (matchIconColorChecked) {
+                                                    ColorFilter.tint(menuColor.copy(alpha = menuAlpha))
+                                                } else {
+                                                    ColorFilter.tint(Color.Black)
+                                                }
+                                            )
+                                        }
+                                        if (showWebView) {
+                                            WebViewComponent(
+                                                onClose = { showWebView = false }
+                                            )
+                                        }
                                     }
-                                },
-                                colors = IconButtonDefaults.iconButtonColors(
-                                    containerColor = Color.Transparent
-                                )
-                            ) {
-                                Icon(
-                                    Icons.Default.Star,
-                                    contentDescription = "Toggle Zoom",
-                                    modifier = Modifier.size(30.dp),
-                                    tint = Color.Black
-                                )
-                            }
-                            if (UIStateManager.editMode) {
-                                Column {
-                                    // Toggle Grid Visibility Icon
-                                    IconButton(onClick = { gridVisible.value = !gridVisible.value },modifier = Modifier.padding(top = 40.dp)) {
-
-                                        Icon(
-                                            imageVector = if (gridVisible.value) Icons.Default.Edit else Icons.Default.Edit,
-                                            contentDescription = null
-                                        )
-                                    }
-
-                                    // Change Grid Size Icon
-                                    IconButton(onClick = { gridSize.intValue = (gridSize.intValue % 100) + 10 }) {
-                                        Icon(imageVector = Icons.Default.Menu, contentDescription = null)
-                                    }
-
-                                    // Change Grid Alpha Icon
-                                    IconButton(onClick = { gridAlpha.floatValue = if (gridAlpha.floatValue == 0.25f) 0.5f else 0.25f }) {
-                                        Icon(imageVector = Icons.Default.Face, contentDescription = null)
-                                    }
-                                    // IconButton to enable/disable MouseCursor
+                                }
+                                if (isCursorVisible == 1) {
                                     IconButton(
                                         onClick = {
-                                            mouseCursor?.let {
-                                                if (it.isCursorVisible) {
-                                                    it.disableCursor()
-                                                } else {
-                                                    it.enableCursor()
+                                            showMouseMenu = !showMouseMenu
+                                        }
+                                    ) {
+                                        val painter = rememberAsyncImagePainter(
+                                            model = ImageRequest.Builder(LocalContext.current)
+                                                .data(R.drawable.mouse_24dp_e8eaed_fill0_wght400_grad0_opsz24)
+                                                .build()
+                                        )
+                                        if (iconGlowChecked) {
+                                            Image(
+                                                painter = painter,
+                                                contentDescription = "Enable Cursor",
+                                                modifier = Modifier
+                                                    .size(30.dp)
+                                                    .scale(scaleFactor)
+                                                    .blur(blurRadius),
+                                                colorFilter = ColorFilter.tint(shadowColor)
+                                            )
+                                        }
+                                        Image(
+                                            painter = painter,
+                                            contentDescription = "Enable Cursor",
+                                            modifier = Modifier.size(24.dp),
+                                            colorFilter = if (matchIconColorChecked) {
+                                                ColorFilter.tint(menuColor.copy(alpha = menuAlpha))
+                                            } else {
+                                                ColorFilter.tint(Color.Black)
+                                            }
+                                        )
+                                    }
+                                    if (showMouseMenu) {
+                                        Column(
+                                            verticalArrangement = Arrangement.Top,
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .padding(top = 32.dp)
+                                                .background(color = Color.White, shape = RoundedCornerShape(8.dp))
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(color = customColor)
+                                        ) {
+                                            Text(
+                                                text = "${sensitivityMouse.roundToInt()}",
+                                                fontSize = 24.sp,
+                                                color = Color.White
+                                            )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Slider(
+                                                    value = sensitivityMouse,
+                                                    onValueChange = { newValue ->
+                                                        sensitivityMouse = newValue
+                                                        CoroutineScope(Dispatchers.Main).launch {
+                                                            setSensitivityMouse(context, newValue)
+                                                        }
+                                                    },
+                                                    valueRange = 400f..9000f,
+                                                    steps = 49,
+                                                    modifier = Modifier.width(150.dp),
+                                                    colors = SliderDefaults.colors(
+                                                        thumbColor = Color.Black, // Color of the thumb
+                                                        activeTrackColor = Color.Black, // Color of the active track
+                                                        inactiveTrackColor = Color.Black, // Color of the inactive track
+                                                        activeTickColor = Color.Red, // Color of the active ticks
+                                                        inactiveTickColor = Color.Red // Color of the inactive ticks
+                                                    )
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "Set Offset X",
+                                                fontSize = 24.sp,
+                                                color = Color.White
+                                            )
+
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                IconButton(
+                                                    onClick = {
+                                                        offsetXMouse = (offsetXMouse - 1f).coerceIn(-100f..100f)
+                                                        CoroutineScope(Dispatchers.Main).launch {
+                                                            setOffsetXMouse(context, offsetXMouse)
+                                                        }
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.ChevronLeft,
+                                                        contentDescription = "Decrease Offset X",
+                                                        modifier = Modifier.size(24.dp),
+                                                        tint = Color.White
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "${offsetXMouse.roundToInt()}",
+                                                    fontSize = 24.sp,
+                                                    color = Color.White
+                                                )
+                                                IconButton(
+                                                    onClick = {
+                                                        offsetXMouse = (offsetXMouse + 1f).coerceIn(-100f..100f)
+                                                        CoroutineScope(Dispatchers.Main).launch {
+                                                            setOffsetXMouse(context, offsetXMouse)
+                                                        }
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.ChevronRight,
+                                                        contentDescription = "Increase Offset X",
+                                                        modifier = Modifier.size(24.dp),
+                                                        tint = Color.White
+                                                    )
                                                 }
                                             }
-                                        },
-                                        colors = IconButtonDefaults.iconButtonColors(
-                                        containerColor = Color.Transparent
-                                        )
+
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "Set Offset Y",
+                                                fontSize = 24.sp,
+                                                color = Color.White
+                                            )
+
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(top = 16.dp)
+                                            ) {
+                                                IconButton(
+                                                    onClick = {
+                                                        offsetYMouse = (offsetYMouse - 1f).coerceIn(-100f..100f)
+                                                        CoroutineScope(Dispatchers.Main).launch {
+                                                            setOffsetYMouse(context, offsetYMouse)
+                                                        }
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.ArrowDropDown,
+                                                        contentDescription = "Decrease Offset Y",
+                                                        modifier = Modifier.size(24.dp),
+                                                        tint = Color.White
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "${offsetYMouse.roundToInt()}",
+                                                    fontSize = 24.sp,
+                                                    color = Color.White
+                                                )
+                                                IconButton(
+                                                    onClick = {
+                                                        offsetYMouse = (offsetYMouse + 1f).coerceIn(-100f..100f)
+                                                        CoroutineScope(Dispatchers.Main).launch {
+                                                            setOffsetYMouse(context, offsetYMouse)
+                                                        }
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.ArrowDropUp,
+                                                        contentDescription = "Increase Offset Y",
+                                                        modifier = Modifier.size(24.dp),
+                                                        tint = Color.White
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (context is Activity) {
+                                    IconButton(
+                                        onClick = {
+                                            showKeyboard(context)
+                                        }
                                     ) {
-                                        Icon(
-                                            if (isCursorVisible) Icons.Sharp.Send else Icons.Sharp.Send,
-                                            contentDescription = "Toggle Mouse Cursor",
-                                            modifier = Modifier.size(30.dp),
-                                            tint = Color.Black
+                                        val painter = rememberAsyncImagePainter(
+                                            model = ImageRequest.Builder(LocalContext.current)
+                                                .data(R.drawable.keyboard_24dp_e8eaed_fill0_wght400_grad0_opsz24)
+                                                .build()
+                                        )
+                                        if (iconGlowChecked) {
+                                            Image(
+                                                painter = painter,
+                                                contentDescription = "Show Keyboard",
+                                                modifier = Modifier
+                                                    .size(30.dp)
+                                                    .scale(scaleFactor)
+                                                    .blur(blurRadius),
+                                                colorFilter = ColorFilter.tint(shadowColor)
+                                            )
+                                        }
+                                        Image(
+                                            painter = painter,
+                                            contentDescription = "Show Keyboard",
+                                            modifier = Modifier.size(24.dp),
+                                            colorFilter = if (matchIconColorChecked) {
+                                                ColorFilter.tint(menuColor.copy(alpha = menuAlpha))
+                                            } else {
+                                                ColorFilter.tint(Color.Black)
+                                            }
                                         )
                                     }
                                 }
+                                TravelMenuPopup(onKeyEvent = onKeyEvent)
+                            }
+
+                            if (editMode) {
+                                IconButton(onClick = {
+                                    gridVisible.value = !gridVisible.value
+                                }) {
+                                    val painter = rememberAsyncImagePainter(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(R.drawable.grid_3x3_24dp_e8eaed_fill0_wght400_grad0_opsz24)
+                                            .build()
+                                    )
+                                    if (iconGlowChecked) {
+                                        Image(
+                                            painter = painter,
+                                            contentDescription = "Toggle Grid Visibility",
+                                            modifier = Modifier
+                                                .size(30.dp)
+                                                .scale(scaleFactor)
+                                                .blur(blurRadius),
+                                            colorFilter = ColorFilter.tint(shadowColor)
+                                        )
+                                    }
+                                    Image(
+                                        painter = painter,
+                                        contentDescription = "Toggle Grid Visibility",
+                                        modifier = Modifier.size(24.dp),
+                                        colorFilter = if (matchIconColorChecked) {
+                                            ColorFilter.tint(menuColor.copy(alpha = menuAlpha))
+                                        } else {
+                                            ColorFilter.tint(Color.Black)
+                                        }
+                                    )
+                                }
+                                IconButton(onClick = {
+                                    gridSize.intValue = (gridSize.intValue % 100) + 10
+                                }) {
+                                    val painter = rememberAsyncImagePainter(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(R.drawable.grid_4x4_24dp_e8eaed_fill0_wght400_grad0_opsz24)
+                                            .build()
+                                    )
+                                    if (iconGlowChecked) {
+                                        Image(
+                                            painter = painter,
+                                            contentDescription = "Change Grid Size",
+                                            modifier = Modifier
+                                                .size(30.dp)
+                                                .scale(scaleFactor)
+                                                .blur(blurRadius),
+                                            colorFilter = ColorFilter.tint(shadowColor)
+                                        )
+                                    }
+                                    Image(
+                                        painter = painter,
+                                        contentDescription = "Change Grid Size",
+                                        modifier = Modifier.size(24.dp),
+                                        colorFilter = if (matchIconColorChecked) {
+                                            ColorFilter.tint(menuColor.copy(alpha = menuAlpha))
+                                        } else {
+                                            ColorFilter.tint(Color.Black)
+                                        }
+                                    )
+                                }
+                                IconButton(onClick = {
+                                    gridAlpha.floatValue =
+                                        if (gridAlpha.floatValue == 0.25f) 0.5f else 0.25f
+                                }) {
+                                    val painter = rememberAsyncImagePainter(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(R.drawable.light_mode_24dp_e8eaed_fill0_wght400_grad0_opsz24)
+                                            .build()
+                                    )
+                                    if (iconGlowChecked) {
+                                        Image(
+                                            painter = painter,
+                                            contentDescription = "Change Grid Alpha",
+                                            modifier = Modifier
+                                                .size(30.dp)
+                                                .scale(scaleFactor)
+                                                .blur(blurRadius),
+                                            colorFilter = ColorFilter.tint(shadowColor)
+                                        )
+                                    }
+                                    Image(
+                                        painter = painter,
+                                        contentDescription = "Change Grid Alpha",
+                                        modifier = Modifier.size(24.dp),
+                                        colorFilter = if (matchIconColorChecked) {
+                                            ColorFilter.tint(menuColor.copy(alpha = menuAlpha))
+                                        } else {
+                                            ColorFilter.tint(Color.Black)
+                                        }
+                                    )
+                                }
                             }
                         }
+                    }
+
+                    IconButton(
+                        onClick = {
+                            expanded2 = !expanded2
+                            showMouseMenu = false
+                            if (configureControls && tutorial && highlightStep == 1) {
+                                highlightStep++
+                            }
+                            if (!expanded2) {
+                                editMode = false
+                            }
+                        }
+                    ) {
+                        val iconTint = if (configureControls && tutorial && highlightStep == 1) {
+                            Color.Yellow
+                        } else if (matchIconColorChecked) {
+                            menuColor.copy(alpha = menuAlpha)
+                        } else {
+                            Color.Black
+                        }
+
+                        if (iconGlowChecked) {
+                            @Suppress("DEPRECATION")
+                            Icon(
+                                imageVector = if (expanded2) Icons.Default.KeyboardArrowLeft else Icons.Default.KeyboardArrowRight,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .scale(scaleFactor)
+                                    .blur(blurRadius)
+                                    .alpha(if (configureControls && tutorial && highlightStep == 1) alpha.value else 1f),
+                                tint = shadowColor,
+                            )
+                        }
+
+                        @Suppress("DEPRECATION")
+                        Icon(
+                            imageVector = if (expanded2) Icons.Default.KeyboardArrowLeft else Icons.Default.KeyboardArrowRight,
+                            contentDescription = if (expanded2) "Collapse" else "Expand",
+                            modifier = Modifier
+                                .size(30.dp)
+                                .alpha(if (configureControls && tutorial && highlightStep == 1) alpha.value else 1f),
+                            tint = iconTint
+                        )
                     }
                 }
             }
@@ -302,30 +831,42 @@ fun OverlayUI(
             verticalArrangement = Arrangement.Center
         ) {
             if (UIStateManager.isMemoryInfoEnabled) {
-                DraggableBox(editMode = UIStateManager.editMode) { fontSize ->
+                DraggableBox { fontSize, textColor, boxWidth, boxHeight ->
                     Text(
                         text = UIStateManager.memoryInfoText,
-                        color = Color.White,
+                        color = textColor,
                         fontSize = fontSize.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
             if (UIStateManager.isBatteryStatusEnabled) {
-                DraggableBox(editMode = UIStateManager.editMode) { fontSize ->
+                DraggableBox { fontSize, textColor, boxWidth, boxHeight ->
                     Text(
                         text = UIStateManager.batteryStatus,
-                        color = Color.White,
+                        color = textColor,
                         fontSize = fontSize.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
             if (UIStateManager.isLoggingEnabled) {
-                DraggableBox(editMode = UIStateManager.editMode) { fontSize ->
+                DraggableBox { fontSize, textColor, boxWidth, boxHeight ->
                     Text(
-                        text = logMessages.value,
-                        color = Color.White,
+                        text = UIStateManager.logMessagesText,
+                        color = textColor,
+                        fontSize = fontSize.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+            if (UIStateManager.isAppLoggingEnabled) {
+                DraggableBox { fontSize, textColor, boxWidth, boxHeight ->
+                    LogsBox(logs = LogRepository.logs, fontSize = fontSize, boxWidth = boxWidth, boxHeight = boxHeight)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = UIStateManager.logMessagesText,
+                        //color = textColor,
                         fontSize = fontSize.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -335,10 +876,16 @@ fun OverlayUI(
     }
 }
 
+@Suppress("DEPRECATION")
+fun showKeyboard(activity: Activity) {
+    val inputMethodManager = activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+    inputMethodManager.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
+}
+
 @Composable
 fun DraggableBox(
-    editMode: Boolean,
-    content: @Composable (Float) -> Unit
+    content: @Composable (Float, Color, Float, Float) -> Unit
 ) {
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
@@ -347,20 +894,27 @@ fun DraggableBox(
     var isDragging by remember { mutableStateOf(false) }
     var isResizing by remember { mutableStateOf(false) }
     var fontSize by remember { mutableFloatStateOf(10f) }
+    var useBlackText by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
+
+    // Auto scroll to bottom when content changes
+    LaunchedEffect(scrollState.maxValue) {
+        coroutineScope.launch {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
 
     Box(
         modifier = Modifier
             .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
             .size(width = boxWidth.dp, height = boxHeight.dp)
-            .background(Color.Transparent)
-            //.verticalScroll(scrollState)
             .then(
-                if (UIStateManager.editMode) {
+                if (editMode) {
                     Modifier.pointerInput(Unit) {
                         detectDragGestures(
                             onDragStart = { isDragging = true },
-                            onDrag = { change, dragAmount ->
+                            onDrag = { _, dragAmount ->
                                 offsetX += dragAmount.x
                                 offsetY += dragAmount.y
                             },
@@ -369,46 +923,90 @@ fun DraggableBox(
                     }
                 } else Modifier
             )
-            .border(2.dp, if (isDragging || isResizing) Color.Red else Color.Transparent)
+            .border(2.dp, when {
+                editMode -> Color.Gray
+                isDragging || isResizing -> Color.Red
+                else -> Color.Transparent
+            }) // Added condition for editMode being gray
             .padding(8.dp)
     ) {
-        Column(modifier = Modifier.fillMaxSize().verticalScroll(scrollState), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                content(fontSize)
-            }
-            if (UIStateManager.editMode) {
-                Slider(
-                    value = fontSize,
-                    onValueChange = { fontSize = it },
-                    valueRange = 5f..30f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.Red,
-                        activeTrackColor = Color(alpha = .9f, red = 0f, green = 0f, blue = 0f),
-                        inactiveTrackColor = Color(alpha = 0.6f, red = 0f, green = 0f, blue = 0f)
-                    ),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                )
-
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier.weight(1f).verticalScroll(scrollState),
+                contentAlignment = Alignment.Center
+            ) {
+                val textColor = if (useBlackText) Color.Black else Color.White
+                content(fontSize, textColor, boxWidth, boxHeight)
             }
         }
-        if (UIStateManager.editMode) {
-            Box(
+
+        if (editMode) {
+            Row(
                 modifier = Modifier
-                    .size(16.dp)
-                    .offset { IntOffset(boxWidth.roundToInt() - 16.dp.toPx().roundToInt() - 16, boxHeight.roundToInt() - 16.dp.toPx().roundToInt() - 16) }
-                    .background(Color.Red)
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = { isResizing = true },
-                            onDrag = { change, dragAmount ->
-                                boxWidth += dragAmount.x
-                                boxHeight += dragAmount.y
-                            },
-                            onDragEnd = { isResizing = false }
-                        )
-                    }
                     .align(Alignment.BottomEnd)
-            )
+                    .fillMaxWidth()
+                    .background(Color.Transparent),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(
+                    onClick = { fontSize = (fontSize - 2f).coerceAtLeast(5f) },
+                    modifier = Modifier.alpha(if (editMode) 1f else 0f) // Adjust visibility when not in edit mode
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Remove,
+                        contentDescription = "Decrease Font Size",
+                        tint = Color.Red
+                    )
+                }
+                IconButton(
+                    onClick = { fontSize = (fontSize + 2f).coerceAtMost(30f) },
+                    modifier = Modifier.alpha(if (editMode) 1f else 0f) // Adjust visibility when not in edit mode
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Increase Font Size",
+                        tint = Color.Red
+                    )
+                }
+                IconButton(
+                    onClick = { useBlackText = !useBlackText },
+                    modifier = Modifier.alpha(if (editMode) 1f else 0f) // Adjust visibility when not in edit mode
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Palette,
+                        contentDescription = "Toggle Text Color",
+                        tint = if (useBlackText) Color.Black else Color.White
+                    )
+                }
+                IconButton(
+                    onClick = { /* Resize logic */ },
+                    modifier = Modifier
+                        .alpha(if (editMode) 1f else 0f) // Adjust visibility when not in edit mode
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragStart = { isResizing = true },
+                                onDrag = { _, dragAmount ->
+                                    boxWidth += dragAmount.x
+                                    boxHeight += dragAmount.y
+                                },
+                                onDragEnd = { isResizing = false }
+                            )
+                        }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.OpenInFull,
+                        contentDescription = "Resize Handle",
+                        tint = Color.Red,
+                        modifier = Modifier
+                            .graphicsLayer {
+                                scaleX = -1f // Flip horizontally
+                            }
+                    )
+                }
+            }
         }
     }
 }
@@ -416,101 +1014,16 @@ fun DraggableBox(
 // This is the settings window while in-game when you hit the gear icon. (top left)
 @Composable
 fun PopUpWindow(
-    expanded: Boolean,
     context: Context,
-    onClose: () -> Unit,
-    onToggleUI: () -> Unit,
-    onToggleVibration: () -> Unit,
-    onToggleMemoryInfo: () -> Unit,
-    onToggleBatteryStatus: () -> Unit,
-    onToggleLogcat: () -> Unit
+    onClose: () -> Unit
 ) {
-    val gradientColors = listOf(Color(0xFF42A5F5), Color(0xFF478DE0), Color(0xFF3F76D2), Color(0xFF3B5FBA))
-    if (expanded) {
-        Dialog(onDismissRequest = onClose) {
-            Column(
-                modifier = Modifier
-                    .background(Color(alpha = 0.6f, red = 0f, green = 0f, blue = 0f), shape = RoundedCornerShape(8.dp))
-                    .padding(16.dp)
-            ) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3), // Three columns per row
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxSize()
-                ) {
-                    items(6) { index -> // Adjust the number of items as needed
-                        val (text, enabled) = when (index) {
-                            0 -> "Close" to false
-                            1 -> "Hide UI" to UIStateManager.isUIHidden
-                            2 -> "Enable Vibration" to UIStateManager.isVibrationEnabled
-                            3 -> "Memory\n Info" to UIStateManager.isMemoryInfoEnabled
-                            4 -> "Battery Status" to UIStateManager.isBatteryStatusEnabled
-                            5 -> "Logcat" to UIStateManager.isLoggingEnabled
-                            else -> "" to false
-                        }
-
-                        Card(
-                            onClick = {
-                                when (index) {
-                                    0 -> onClose()
-                                    1 -> onToggleUI()
-                                    2 -> onToggleVibration()
-                                    3 -> onToggleMemoryInfo()
-                                    4 -> onToggleBatteryStatus()
-                                    5 -> onToggleLogcat()
-                                }
-                            },
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .fillMaxWidth()
-                                .aspectRatio(1f) // Ensure circular shape
-                                .border(1.dp, Color.Black, CircleShape)
-                                .background(Brush.linearGradient(gradientColors), CircleShape),
-                            shape = CircleShape,
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.Transparent // Override container color to transparent
-                            ),
-                            elevation = CardDefaults.cardElevation(4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize()
-                                .background(Brush.linearGradient(gradientColors), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = text,
-                                    color = if (enabled) Color.Green else Color.Black,
-                                    fontSize = 17.sp,
-                                    textAlign = TextAlign.Center,
-                                    style = TextStyle(
-                                        shadow = Shadow(
-                                            color = Color.Black,
-                                            offset = Offset(2f, 2f),
-                                            blurRadius = 4f
-                                        )
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            // Conditionally display the "Exit to Launcher" button at the bottom center
-            if (configureControls) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.BottomCenter
-                ) {
-                    Button(
-                        onClick = { (context as? Activity)?.finish() }
-                    ) {
-                        Text("Exit to Launcher")
-                    }
-                }
-            }
+   Dialog(onDismissRequest = onClose) {
+    Column(
+        modifier = Modifier
+            .background(Color(alpha = 0.6f, red = 0f, green = 0f, blue = 0f), shape = RoundedCornerShape(8.dp))
+            .padding(bottom = 32.dp)
+    ) {
+        ToggleFeatureSwitch(context)
         }
     }
 }
@@ -554,6 +1067,70 @@ fun GridOverlay(gridSize: Int, snapX: Float?, snapY: Float?, alpha: Float) {
                     radius = 2.dp.toPx(),
                     center = Offset(x.toFloat(), y.toFloat())
                 )
+            }
+        }
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun WebViewComponent(onClose: () -> Unit) {
+    val context = LocalContext.current
+    //var url by remember { mutableStateOf("https://gamemap.uesp.net/mw/?x=-16384&y=40960&zoom=2.077") }
+    var url by remember { mutableStateOf("https://en.uesp.net/wiki/Morrowind:Morrowind") }
+    if (context is Activity) {
+        Box(
+            modifier = Modifier
+                .padding(1.dp)
+                .fillMaxSize()
+        ) {
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(color = Color.White),
+                    contentAlignment = Alignment.TopEnd
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(color = Color.White)
+                    ) {
+                        IconButton(onClick = { showKeyboard(context) }) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Show Keyboard"
+                            )
+                        }
+                        TextField(
+                            value = url,
+                            onValueChange = { url = it },
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                            label = { Text("Enter URL") }
+                        )
+                        IconButton(onClick = { onClose() }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close WebView"
+                            )
+                        }
+                    }
+                }
+
+                AndroidView(factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        webViewClient = WebViewClient()
+                        settings.setSupportZoom(true)
+                        settings.loadWithOverviewMode = true
+                        settings.useWideViewPort = true
+                        settings.domStorageEnabled = true
+                        settings.loadsImagesAutomatically = true
+                        settings.allowContentAccess = true
+                        settings.cacheMode= WebSettings.LOAD_NO_CACHE
+                        loadUrl(url)
+                    }
+                })
             }
         }
     }

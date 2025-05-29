@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
@@ -8,42 +9,48 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "org.openmw"
+        applicationId = "com.alpha3.launcher"
         minSdk = 24
 
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.6"
+
+        ndk {
+            //noinspection ChromeOsAbiSupport
+            abiFilters += listOf("arm64-v8a", "x86", "x86_64")
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
         multiDexEnabled = true
-        resourceConfigurations += setOf()
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                          "proguard-rules.pro"
             )
         }
         debug {
-            isDebuggable = true
-            isMinifyEnabled = false
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                          "proguard-rules.pro"
             )
-            isJniDebuggable = true
+            isJniDebuggable = false
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
     buildFeatures {
         compose = true
@@ -70,8 +77,8 @@ android {
         includeInApk = true
         includeInBundle = true
     }
-    ndkVersion = "26.3.11579264"
-    buildToolsVersion = "34.0.0"
+    ndkVersion = "27.2.12479018"
+    buildToolsVersion = "35.0.0"
 }
 
 dependencies {
@@ -93,12 +100,27 @@ dependencies {
     implementation(libs.androidx.runner)
     implementation(libs.androidx.espresso.core)
     implementation(libs.androidx.profileinstaller)
-    implementation(libs.lottie.compose)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.androidx.concurrent.futures)
+    implementation(libs.guava)
+    implementation(libs.androidx.webkit)
+    implementation(libs.okhttp)
+    implementation(libs.jsoup)
+    implementation(libs.gson)
     implementation(libs.coil.compose)
+    implementation(libs.coil.svg)
     implementation(libs.core.ktx)
     implementation(libs.reorderable)
     implementation(libs.relinker)
     implementation(libs.androidx.window)
+    implementation(libs.colorpicker.compose)
+    implementation(libs.apache.commons.compress)
+    implementation(libs.androidx.material.icons.extended)
+    implementation(libs.mosaic.runtime)
+    implementation(libs.core)
+    implementation(libs.termux.app)
+    implementation(libs.xz)
+    implementation(libs.org.eclipse.jgit)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

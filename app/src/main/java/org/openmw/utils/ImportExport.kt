@@ -1,251 +1,40 @@
 package org.openmw.utils
 
 import android.content.Context
-import android.net.Uri
-import android.os.Environment
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import org.openmw.Constants
-import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.IOException
-import java.io.InputStream
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import kotlin.random.Random
 
-@Composable
-fun CfgImport() {
-    var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
-    var savedPath by remember { mutableStateOf<String?>(null) }
-
-    val openDocumentLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        selectedFileUri = uri
-    }
-
-    val context = LocalContext.current
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .wrapContentHeight()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Button(onClick = {
-                openDocumentLauncher.launch(arrayOf("*/*"))
-            }) {
-                Text(text = "Import", color = Color.White)
-            }
-
-            selectedFileUri?.let { uri ->
-                val destinationFile = File(Constants.USER_OPENMW_CFG)
-                copyFile(context, uri, destinationFile)
-                savedPath = destinationFile.absolutePath
-            }
-
-            savedPath?.let {
-                Toast.makeText(context, "Saved Path: $it", Toast.LENGTH_LONG).show()
-            }
-
-
-            Button(onClick = {
-                val downloadFolder =
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                val destinationFile = File(downloadFolder, "openmw.cfg")
-                try {
-                    copyFile(
-                        context,
-                        Uri.fromFile(File(Constants.USER_OPENMW_CFG)),
-                        destinationFile
-                    )
-                    Toast.makeText(context, "File exported to Downloads", Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT)
-                        .show()
-                }
-            }) {
-                Text(text = "Export", color = Color.White)
-            }
-        }
-    }
-}
-
-fun copyFile(context: Context, uri: Uri, destinationFile: File) {
-    val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
-    val outputStream: FileOutputStream = FileOutputStream(destinationFile)
-    inputStream?.use { input ->
-        outputStream.use { output ->
-            input.copyTo(output)
-        }
-    }
-}
-
-fun zipFilesAndDirectories(rootDirectory: File, files: List<File>, directories: List<File>, zipFile: File) {
-    ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { out ->
-        val addedEntries = mutableSetOf<String>()
-
-        // Add files to the zip
-        files.forEach { file ->
-            FileInputStream(file).use { fi ->
-                BufferedInputStream(fi).use { origin ->
-                    val entryName = file.relativeTo(rootDirectory).path
-                    if (addedEntries.add(entryName)) {
-                        val entry = ZipEntry(entryName)
-                        out.putNextEntry(entry)
-                        origin.copyTo(out, 1024)
-                        out.closeEntry()
-                    }
-                }
-            }
-        }
-
-        // Add directories to the zip
-        directories.forEach { dir ->
-            dir.walkTopDown().forEach { file ->
-                val entryName = file.relativeTo(rootDirectory).path
-                if (file.isDirectory && !addedEntries.contains(entryName)) {
-                    out.putNextEntry(ZipEntry("$entryName/"))
-                    addedEntries.add(entryName)
-                    out.closeEntry()
-                } else if (file.isFile) {
-                    FileInputStream(file).use { fi ->
-                        BufferedInputStream(fi).use { origin ->
-                            if (addedEntries.add(entryName)) {
-                                val entry = ZipEntry(entryName)
-                                out.putNextEntry(entry)
-                                origin.copyTo(out, 1024)
-                                out.closeEntry()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-fun exportFile(context: Context, fileName: String) {
-    val sourceFile = File(Constants.USER_CONFIG, fileName)
-    val targetDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-    val targetFile = File(targetDirectory, fileName)
-
-    try {
-        sourceFile.copyTo(targetFile, overwrite = true)
-        Toast.makeText(context, "File exported to Downloads", Toast.LENGTH_SHORT).show()
-    } catch (e: IOException) {
-        e.printStackTrace()
-        Toast.makeText(context, "Failed to export file", Toast.LENGTH_SHORT).show()
-    }
-}
-
-
-fun exportFilesAndDirectories(context: Context) {
-    val downloadFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-    val dateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault())
-    val date = dateFormat.format(Date())
-    val zipFile = File(downloadFolder, "openmw_$date.zip")
-    val rootDirectory = File(Constants.USER_FILE_STORAGE)
-
-    try {
-        val filesToZip = listOf(
-            File("${Constants.USER_FILE_STORAGE}/config/openmw.cfg"),
-            File("${Constants.USER_FILE_STORAGE}/config/settings.cfg"),
-            File("${Constants.USER_FILE_STORAGE}/config/shaders.yaml")
-        )
-        val directoriesToZip = listOf(
-            File("${Constants.USER_FILE_STORAGE}/saves"),
-            File("${Constants.USER_FILE_STORAGE}/screenshots")
-        )
-        zipFilesAndDirectories(rootDirectory, filesToZip, directoriesToZip, zipFile)
-        Toast.makeText(context, "Files and directories zipped and exported to Downloads", Toast.LENGTH_SHORT).show()
-    } catch (e: Exception) {
-        e.printStackTrace()
-        Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun unzipFiles(zipFile: File, targetDirectory: File) {
-    ZipInputStream(FileInputStream(zipFile)).use { zis ->
-        var entry: ZipEntry?
-        while (zis.nextEntry.also { entry = it } != null) {
-            val newFile = File(targetDirectory, entry!!.name)
-            // Create directories for subfolders
-            if (entry!!.isDirectory) {
-                newFile.mkdirs()
-            } else {
-                // Extract files
-                FileOutputStream(newFile).use { fos ->
-                    val buffer = ByteArray(1024)
-                    var len: Int
-                    while (zis.read(buffer).also { len = it } > 0) {
-                        fos.write(buffer, 0, len)
-                    }
-                }
-            }
-            zis.closeEntry()
-        }
-    }
-}
-
-fun importFilesAndDirectories(context: Context) {
-    val downloadFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-    val targetDirectory = File(Constants.USER_FILE_STORAGE)
-
-    try {
-        val newestZipFile = downloadFolder.listFiles { _, name ->
-            name.startsWith("openmw_") && name.endsWith(".zip")
-        }?.maxByOrNull { it.lastModified() }
-
-        if (newestZipFile != null) {
-            unzipFiles(newestZipFile, targetDirectory)
-            Toast.makeText(context, "Files and directories imported successfully", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(context, "No zip files found for import", Toast.LENGTH_SHORT).show()
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_SHORT).show()
-    }
-}
-
 fun importSpecificFile(context: Context, filePattern: String) {
-    val downloadFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-    val targetDirectory = File(Constants.USER_FILE_STORAGE)
+    val downloadFolder = File(Constants.USER_FILE_STORAGE, "OpenMW/Exports")
     val regex = Regex(filePattern)
 
     try {
@@ -296,7 +85,7 @@ fun exportCrashAndLogcatFiles(context: Context) {
     val crashFile = File(Constants.CRASH_FILE)
     val logcatFile = File(Constants.LOGCAT_FILE)
     val openmwlog = File(Constants.OPENMW_LOG)
-    val downloadFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    val downloadFolder = File(Constants.USER_FILE_STORAGE, "OpenMW/Exports")
 
     try {
         if (crashFile.exists()) {
@@ -323,3 +112,266 @@ fun exportCrashAndLogcatFiles(context: Context) {
     }
 }
 
+@Composable
+fun ImportDialog(context: Context, onDismiss: () -> Unit) {
+    var showDialog by remember { mutableStateOf(true) }
+    var step by remember { mutableIntStateOf(1) }
+    val backupFiles = File(Constants.USER_FILE_STORAGE, "OpenMW/Exports")
+        .listFiles { _, name -> name.startsWith("openmw_") && name.endsWith(".zip") }
+        ?.sortedByDescending { it.lastModified() }
+        ?.toList() ?: emptyList()
+    var selectedBackup by remember { mutableStateOf<File?>(null) }
+    var directoriesToImport by remember { mutableStateOf(emptyList<Pair<String, String>>()) }
+    val selectedDirectories = remember { mutableStateListOf<String>() }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showDialog = false
+                onDismiss()
+            },
+            title = { Text(text = if (step == 1) "Select Backup File" else "Select Directories to Import") },
+            text = {
+                if (step == 1) {
+                    Column {
+                        backupFiles.forEach { file ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(
+                                    selected = selectedBackup == file,
+                                    onClick = {
+                                        selectedBackup = file
+                                        // Load directories from the selected ZIP file
+                                        selectedBackup?.let { backupFile ->
+                                            directoriesToImport = loadDirectoriesFromZip(backupFile)
+                                        }
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = file.name)
+                            }
+                        }
+                    }
+                } else {
+                    Column {
+                        directoriesToImport.forEach { (name, path) ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = selectedDirectories.contains(path),
+                                    onCheckedChange = {
+                                        if (selectedDirectories.contains(path)) {
+                                            selectedDirectories.remove(path)
+                                        } else {
+                                            selectedDirectories.add(path)
+                                        }
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = name)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (step == 1) {
+                            step = 2
+                        } else {
+                            if (selectedBackup != null) {
+                                val targetDirectory = File(Constants.USER_FILE_STORAGE)
+                                try {
+                                    ZipInputStream(FileInputStream(selectedBackup)).use { zis ->
+                                        var entry: ZipEntry?
+                                        while (zis.nextEntry.also { entry = it } != null) {
+                                            val newFile = File(targetDirectory, entry!!.name)
+                                            if (selectedDirectories.any { entry!!.name.startsWith(it) }) {
+                                                if (entry!!.isDirectory) {
+                                                    newFile.mkdirs()
+                                                } else {
+                                                    FileOutputStream(newFile).use { fos ->
+                                                        val buffer = ByteArray(1024)
+                                                        var len: Int
+                                                        while (zis.read(buffer).also { len = it } > 0) {
+                                                            fos.write(buffer, 0, len)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            zis.closeEntry()
+                                        }
+                                    }
+                                    Toast.makeText(context, "Selected directories imported successfully", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                    Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                Toast.makeText(context, "Please select a backup file", Toast.LENGTH_SHORT).show()
+                            }
+                            showDialog = false
+                            onDismiss()
+                        }
+                    }
+                ) {
+                    Text(if (step == 1) "Next" else "Import")
+                }
+            },
+            dismissButton = {
+                Button(onClick = {
+                    showDialog = false
+                    onDismiss()
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun ExportDialog(context: Context, onDismiss: () -> Unit) {
+    var showDialog by remember { mutableStateOf(true) }
+    val directoriesToZip = listOf(
+        "saves" to "${Constants.USER_FILE_STORAGE}/saves",
+        "config" to "${Constants.USER_FILE_STORAGE}/config",
+        "ui" to "${Constants.USER_FILE_STORAGE}/ui",
+        "screenshots" to "${Constants.USER_FILE_STORAGE}/screenshots"
+    )
+    val selectedDirectories = remember { mutableStateListOf<String>() }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showDialog = false
+                onDismiss()
+            },
+            title = { Text(text = "Select Directories to Export") },
+            text = {
+                Column {
+                    directoriesToZip.forEach { (name, path) ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = selectedDirectories.contains(path),
+                                onCheckedChange = {
+                                    if (selectedDirectories.contains(path)) {
+                                        selectedDirectories.remove(path)
+                                    } else {
+                                        selectedDirectories.add(path)
+                                    }
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = name)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val rootDirectory = File(Constants.USER_FILE_STORAGE)
+                        val zipFile = File(
+                            File(Constants.USER_FILE_STORAGE, "OpenMW/Exports"),
+                            "openmw_${SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())}.zip"
+                        )
+                        val directoriesToZipFiles = selectedDirectories.map { File(it) }
+                        try {
+                            zipFilesAndDirectories(rootDirectory, emptyList(), directoriesToZipFiles, zipFile)
+                            Toast.makeText(context, "Selected directories zipped and exported to Download/OpenMW/Exports", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                        showDialog = false
+                        onDismiss()
+                    }
+                ) {
+                    Text("Export")
+                }
+            },
+            dismissButton = {
+                Button(onClick = {
+                    showDialog = false
+                    onDismiss()
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+fun zipFilesAndDirectories(rootDirectory: File, filesToZip: List<File>, directoriesToZip: List<File>, zipFile: File) {
+    try {
+        ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
+            // Function to add a file to the zip
+            fun addFileToZip(file: File) {
+                FileInputStream(file).use { fis ->
+                    val zipEntry = ZipEntry(file.relativeTo(rootDirectory).path)
+                    zos.putNextEntry(zipEntry)
+                    val buffer = ByteArray(1024)
+                    var length: Int
+                    while (fis.read(buffer).also { length = it } > 0) {
+                        zos.write(buffer, 0, length)
+                    }
+                    zos.closeEntry()
+                }
+            }
+
+            // Add selected files to the zip
+            filesToZip.forEach { file ->
+                if (file.exists()) {
+                    addFileToZip(file)
+                } else {
+                    println("File does not exist: ${file.absolutePath}")
+                }
+            }
+
+            // Add selected directories to the zip
+            directoriesToZip.forEach { dir ->
+                if (dir.exists()) {
+                    dir.walkTopDown().filter { it.isFile }.forEach { file ->
+                        addFileToZip(file)
+                    }
+                } else {
+                    println("Directory does not exist: ${dir.absolutePath}")
+                }
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
+fun loadDirectoriesFromZip(backupFile: File): List<Pair<String, String>> {
+    val directoriesInZip = mutableSetOf<String>()
+    try {
+        ZipInputStream(FileInputStream(backupFile)).use { zis ->
+            var entry: ZipEntry?
+            while (zis.nextEntry.also { entry = it } != null) {
+                val entryName = entry!!.name
+                if (entry!!.isDirectory) {
+                    directoriesInZip.add(entryName)
+                } else {
+                    val dirName = entryName.substringBefore("/")
+                    if (dirName.isNotEmpty()) {
+                        directoriesInZip.add("$dirName/")
+                    }
+                }
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+
+    return directoriesInZip.map { dir ->
+        when {
+            dir.startsWith("saves") -> "Saves" to "saves"
+            dir.startsWith("config") -> "Config" to "config"
+            dir.startsWith("ui") -> "UI" to "ui"
+            dir.startsWith("screenshots") -> "Screenshots" to "screenshots"
+            else -> dir to dir // Default case for unknown directories
+        }
+    }
+}

@@ -3,19 +3,16 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-        <!-- Custom Cursor View -->
-        <org.openmw.ui.controls.ScaleView
-            android:id="@+id/scaleView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_gravity="center" />
-
         <!-- Placeholder for ComposeView -->
         <androidx.compose.ui.platform.ComposeView
             android:id="@+id/compose_overlayUI"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top|start"
-            android:padding="16dp" />
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="top|start" />
 
+        <!-- Placeholder for ComposeView -->
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/compose_leftThumb"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
 </FrameLayout>

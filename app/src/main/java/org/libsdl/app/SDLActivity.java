@@ -33,6 +33,7 @@ import android.view.Display;
 import android.view.Gravity;
 import android.view.InputDevice;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.PointerIcon;
 import android.view.Surface;
 import android.view.SurfaceView;
@@ -51,13 +52,12 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import java.util.Hashtable;
 import java.util.Locale;
 
-import org.openmw.EngineActivity;
-import org.openmw.MainActivity;
-
+import kotlin.Unit;
 
 /**
     SDL Activity
@@ -65,8 +65,8 @@ import org.openmw.MainActivity;
 public class SDLActivity extends AppCompatActivity implements View.OnSystemUiVisibilityChangeListener {
     private static final String TAG = "SDL";
     private static final int SDL_MAJOR_VERSION = 2;
-    private static final int SDL_MINOR_VERSION = 30;
-    private static final int SDL_MICRO_VERSION = 7;
+    private static final int SDL_MINOR_VERSION = 32;
+    private static final int SDL_MICRO_VERSION = 4;
 /*
     // Display InputType.SOURCE/CLASS of events and devices
     //
@@ -94,7 +94,7 @@ public class SDLActivity extends AppCompatActivity implements View.OnSystemUiVis
                 | InputDevice.SOURCE_CLASS_POSITION
                 | InputDevice.SOURCE_CLASS_TRACKBALL);
 
-        if (s2 != 0) cls += "Some_Unkown";
+        if (s2 != 0) cls += "Some_Unknown";
 
         s2 = s_copy & InputDevice.SOURCE_ANY; // keep source only, no class;
 
@@ -168,7 +168,7 @@ public class SDLActivity extends AppCompatActivity implements View.OnSystemUiVis
         if (s == FLAG_TAINTED) src += " FLAG_TAINTED";
         s2 &= ~FLAG_TAINTED;
 
-        if (s2 != 0) src += " Some_Unkown";
+        if (s2 != 0) src += " Some_Unknown";
 
         Log.v(TAG, prefix + "int=" + s_copy + " CLASS={" + cls + " } source(s):" + src);
     }
@@ -799,6 +799,9 @@ public class SDLActivity extends AppCompatActivity implements View.OnSystemUiVis
                                 window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
                                 SDLActivity.mFullscreenModeActive = false;
                             }
+                            if (Build.VERSION.SDK_INT >= 28 /* Android 9 (Pie) */) {
+                                window.getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                            }
                         }
                     } else {
                         Log.e(TAG, "error handling message, getContext() returned no Activity");
@@ -949,7 +952,6 @@ public class SDLActivity extends AppCompatActivity implements View.OnSystemUiVis
 
     public static native void omwSurfaceDestroyed();
     public static native void omwSurfaceRecreated();
-
 
     /**
      * This method is called by SDL using JNI.
@@ -1290,25 +1292,25 @@ public class SDLActivity extends AppCompatActivity implements View.OnSystemUiVis
 
         @Override
         public void run() {
-            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(w, h + HEIGHT_PADDING);
-            params.leftMargin = x;
-            params.topMargin = y;
-
-            if (mTextEdit == null) {
-                mTextEdit = new DummyEdit(SDL.getContext());
-
-                mLayout.addView(mTextEdit, params);
-            } else {
-                mTextEdit.setLayoutParams(params);
-            }
-
-            mTextEdit.setVisibility(View.VISIBLE);
-            mTextEdit.requestFocus();
-
-            InputMethodManager imm = (InputMethodManager) SDL.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-            imm.showSoftInput(mTextEdit, 0);
-
-            mScreenKeyboardShown = true;
+//            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(w, h + HEIGHT_PADDING);
+//            params.leftMargin = x;
+//            params.topMargin = y;
+//
+//            if (mTextEdit == null) {
+//                mTextEdit = new DummyEdit(SDL.getContext());
+//
+//                mLayout.addView(mTextEdit, params);
+//            } else {
+//                mTextEdit.setLayoutParams(params);
+//            }
+//
+//            mTextEdit.setVisibility(View.VISIBLE);
+//            mTextEdit.requestFocus();
+//
+//            InputMethodManager imm = (InputMethodManager) SDL.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+//            imm.showSoftInput(mTextEdit, 0);
+//
+//            mScreenKeyboardShown = true;
         }
     }
 
@@ -1668,6 +1670,9 @@ public class SDLActivity extends AppCompatActivity implements View.OnSystemUiVis
                 handler.postDelayed(rehideSystemUi, 2000);
             }
 
+            getWindow().getDecorView().getWindowInsetsController().hide(
+                    android.view.WindowInsets.Type.systemBars());
+
         }
     }
 
@@ -1888,6 +1893,10 @@ public class SDLActivity extends AppCompatActivity implements View.OnSystemUiVis
             return -1;
         }
         return 0;
+    }
+
+    public static void nativeCommitText(String text, int newCursorPosition) {
+        SDLInputConnection.nativeCommitText(text, newCursorPosition);
     }
 }
 

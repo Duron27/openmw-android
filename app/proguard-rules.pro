@@ -27,10 +27,34 @@
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
 
+-dontobfuscate
+
 # Keep native method names
-#-keepclasseswithmembernames class * {
-#    native <methods>;
-#}
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
 
 # Keep all native classes
-#-keep class org.openmw.* { *; }
+-keep class org.openmw.* { *; }
+-keep class org.libsdl.app.** { *; }
+-keepclassmembers class org.libsdl.app.SDLActivity {
+    public static <methods>;
+}
+
+-dontwarn com.android.org.conscrypt.SSLParametersImpl
+-dontwarn java.awt.Component
+-dontwarn java.awt.GraphicsEnvironment
+-dontwarn java.awt.HeadlessException
+-dontwarn java.awt.Window
+-dontwarn org.apache.harmony.xnet.provider.jsse.SSLParametersImpl
+-dontwarn org.openjsse.javax.net.ssl.SSLParameters
+-dontwarn org.openjsse.javax.net.ssl.SSLSocket
+-dontwarn org.openjsse.net.ssl.OpenJSSE
+-dontwarn com.github.luben.zstd.ZstdInputStream
+-dontwarn org.bouncycastle.jsse.BCSSLParameters
+-dontwarn org.bouncycastle.jsse.provider.BouncyCastleJsseProvider
+-dontwarn org.bouncycastle.jsse.BCSSLSocket
+-dontwarn org.brotli.dec.BrotliInputStream
+-dontwarn org.conscrypt.Conscrypt$Version
+-dontwarn org.conscrypt.Conscrypt
+-dontwarn org.conscrypt.ConscryptHostnameVerifier

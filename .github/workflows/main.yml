@@ -18,8 +18,8 @@ jobs:
     - uses: actions/setup-java@v4
       with:
         distribution: 'corretto' # See 'Supported distributions' for available options
-        java-version: '17'
-      
+        java-version: '21'
+
     - name: Install dependencies
       run: |
         sudo apt-get update
