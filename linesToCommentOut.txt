@@ -1,0 +1,18 @@
+# Plugins to comment out / disable when generating OpenMW config
+# These are mostly cleaned versions of Vennin's overhauls that can conflict or be redundant
+# Last updated: 2026-01 (add date when you edit)
+
+content=Shal Overhaul Skeleton Fix.esp
+content=Clean_Vennin's Lleran Overhaul.ESP
+content=Clean_Vennin's Punabi.ESP
+content=Clean_Vennin's Hlaalu Tomb.ESP
+content=Clean_Vennin's Shal Overhaul.ESP
+content=Clean_sm_golden_mask.ESP
+content=Clean_Daedric_Maul.ESP
+content=Clean_Mines and Caverns.esp
+content=Clean_Vennin's Pulk Overhaul.ESP
+content=Clean_Andrethi.esp
+content=Clean_Vennin's Ulummusa Overhaul.ESP
+content=Clean_Vennin's Hlervi Tomb.ESP
+content=Clean_Addamasartus Overhaul.ESP
+content=Clean_imperial_skirt.esp
